@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import type { Translation } from '../i18n'
 import { SpinnerIcon } from './icons'
+import { exportRowsToXlsx } from '../lib/export'
+import type { CellValue } from '../lib/export'
 
 export function StepIndicator({
   currentStep,
@@ -75,17 +77,32 @@ export function MatchScoreBadge({ score }: { score: number }) {
   )
 }
 
-export function ExportPrintToolbar({ t }: { t: Translation }) {
+export function ExportPrintToolbar({
+  t,
+  filename,
+  sheetName,
+  columns,
+  rows,
+}: {
+  t: Translation
+  filename: string
+  sheetName: string
+  columns: string[]
+  rows: CellValue[][]
+}) {
   const [isExporting, setIsExporting] = useState(false)
 
-  const handleExport = () => {
-    if (isExporting) return
+  const handleExport = async () => {
+    if (isExporting || rows.length === 0) return
     setIsExporting(true)
-    // MOCK export — a real build would stream an .xlsx from the backend.
-    setTimeout(() => {
+    try {
+      // Generates and downloads a real .xlsx entirely in the browser.
+      await exportRowsToXlsx({ filename, sheetName, columns, rows })
+    } catch {
+      alert('Export failed. Please try again.')
+    } finally {
       setIsExporting(false)
-      alert(t.common.exportSuccess)
-    }, 1500)
+    }
   }
 
   return (
@@ -93,7 +110,7 @@ export function ExportPrintToolbar({ t }: { t: Translation }) {
       <button
         type="button"
         onClick={handleExport}
-        disabled={isExporting}
+        disabled={isExporting || rows.length === 0}
         className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-medium text-blue-600 shadow-sm transition-all hover:border-blue-300 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-70"
       >
         {isExporting ? (

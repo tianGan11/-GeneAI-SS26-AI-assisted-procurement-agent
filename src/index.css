@@ -9,3 +9,45 @@ body {
 #root {
   min-height: 100vh;
 }
+
+/* ---------------------------------------------------------------------------
+   Print / "Save as PDF" layout.
+   The on-screen comparison table is intentionally wide (horizontal scroll).
+   For print we rotate the page to landscape and let the table expand to the
+   full page width instead of being clipped by the scroll container.
+--------------------------------------------------------------------------- */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+
+  /* Don't clip page content to one viewport height when printing. */
+  html,
+  body,
+  #root {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Comparison table: unclip and fit the whole table onto the page. */
+  .cmp-print {
+    overflow: visible !important;
+    border: none !important;
+  }
+  .cmp-print table {
+    min-width: 0 !important;
+    width: 100% !important;
+    font-size: 10px;
+  }
+  .cmp-print th,
+  .cmp-print td {
+    min-width: 0 !important;
+    position: static !important;
+    box-shadow: none !important;
+    padding: 6px 6px !important;
+    white-space: normal !important;
+    word-break: break-word;
+    vertical-align: top;
+  }
+}

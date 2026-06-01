@@ -28,7 +28,7 @@ function Workspace({
   }
 
   return (
-    <div className="flex h-screen w-full flex-col overflow-hidden bg-slate-100">
+    <div className="flex h-screen w-full flex-col overflow-hidden bg-slate-100 print:h-auto print:overflow-visible">
       <TopNavbar
         moduleTitle={t.module[activeModule].title}
         subtitle={t.module[activeModule].subtitle}
@@ -36,9 +36,9 @@ function Workspace({
         onLanguageChange={setLanguage}
         t={t}
       />
-      <div className="flex min-h-0 flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 overflow-hidden print:overflow-visible">
         <Sidebar active={activeModule} onChange={setActiveModule} t={t} />
-        <main className="min-w-0 flex-1 overflow-y-auto bg-slate-100 p-8 print:p-4">
+        <main className="min-w-0 flex-1 overflow-y-auto bg-slate-100 p-8 print:overflow-visible print:p-0">
           {activeModule === 'sourcing' && <SourcingModule t={t} />}
           {activeModule === 'comparison' && <ComparisonModule t={t} />}
           {activeModule === 'memory' && <MemoryModule t={t} language={language} />}

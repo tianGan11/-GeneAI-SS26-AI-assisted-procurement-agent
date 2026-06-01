@@ -193,7 +193,33 @@ export function ComparisonModule({ t }: { t: Translation }) {
                 ))}
               </select>
             </div>
-            <ExportPrintToolbar t={t} />
+            <ExportPrintToolbar
+              t={t}
+              filename="fuyao-quote-comparison.xlsx"
+              sheetName="Comparison"
+              columns={[
+                c.colVendor,
+                c.colPlatform,
+                c.colProduct,
+                c.colMatch,
+                c.colPrice,
+                c.colDelivery,
+                c.colPayment,
+                c.colDeliveryMethod,
+                c.colRating,
+              ]}
+              rows={rows.map((r) => [
+                r.vendor,
+                r.platform,
+                r.product,
+                `${r.matchScore}%`,
+                r.unitLabel,
+                r.deliveryLabel,
+                r.paymentLabel,
+                r.deliveryMethod,
+                `${r.rating.toFixed(1)} (${r.reviews})`,
+              ])}
+            />
           </div>
         </div>
 
@@ -235,8 +261,8 @@ function ComparisonTable({
     )
   }
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200">
-      <table className="min-w-[1200px] w-full border-collapse text-left text-sm align-middle">
+    <div className="cmp-print overflow-x-auto rounded-lg border border-slate-200 print:overflow-visible">
+      <table className="min-w-[1200px] w-full border-collapse text-left text-sm align-middle print:min-w-0">
         <thead>
           <tr className="border-b border-slate-200 bg-slate-50">
             <th className={`sticky left-0 z-20 min-w-[240px] border-r border-gray-100 bg-slate-50 shadow-[2px_0_5px_rgba(0,0,0,0.03)] ${HEAD_CELL}`}>
@@ -248,7 +274,7 @@ function ComparisonTable({
             <th className={`min-w-[160px] ${HEAD_CELL}`}>{c.colPayment}</th>
             <th className={`min-w-[150px] ${HEAD_CELL}`}>{c.colDeliveryMethod}</th>
             <th className={`min-w-[120px] ${HEAD_CELL}`}>{c.colRating}</th>
-            <th className={`min-w-[110px] ${HEAD_CELL}`}>{c.colAction}</th>
+            <th className={`min-w-[110px] print:hidden ${HEAD_CELL}`}>{c.colAction}</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100 bg-white">
@@ -292,7 +318,7 @@ function ComparisonTable({
                     <span className="text-slate-500">({row.reviews})</span>
                   </span>
                 </td>
-                <td className="px-4 py-4 align-middle">
+                <td className="px-4 py-4 align-middle print:hidden">
                   <button
                     type="button"
                     onClick={() => onSelect(row.vendor)}

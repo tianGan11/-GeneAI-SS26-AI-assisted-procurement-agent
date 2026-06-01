@@ -72,6 +72,10 @@ export interface Translation {
     cardCapabilities: string
     cardCerts: string
     match: string
+    colName: string
+    colLocation: string
+    colEmail: string
+    colWebsite: string
   }
 
   comparison: {
@@ -88,6 +92,8 @@ export interface Translation {
     sortOptions: Record<ComparisonSortKey, string>
     tableTitle: string
     colVendor: string
+    colPlatform: string
+    colProduct: string
     colMatch: string
     colPrice: string
     colDelivery: string
@@ -234,6 +240,10 @@ export const translations: Record<Language, Translation> = {
       cardCapabilities: 'Core capabilities',
       cardCerts: 'Certifications',
       match: 'match',
+      colName: 'Supplier',
+      colLocation: 'Location',
+      colEmail: 'Email',
+      colWebsite: 'Website',
     },
     comparison: {
       inputLabel: 'Procurement requirement',
@@ -259,6 +269,8 @@ export const translations: Record<Language, Translation> = {
       },
       tableTitle: 'Decision comparison table',
       colVendor: 'Vendor / Platform',
+      colPlatform: 'Platform',
+      colProduct: 'Product',
       colMatch: 'Product match',
       colPrice: 'Unit price',
       colDelivery: 'Lead time',
@@ -405,6 +417,10 @@ export const translations: Record<Language, Translation> = {
       cardCapabilities: '核心能力',
       cardCerts: '资质认证',
       match: '匹配度',
+      colName: '供应商',
+      colLocation: '所在地',
+      colEmail: '邮箱',
+      colWebsite: '网站',
     },
     comparison: {
       inputLabel: '采购需求输入',
@@ -429,6 +445,8 @@ export const translations: Record<Language, Translation> = {
       },
       tableTitle: '决策对比表',
       colVendor: '供应商 / 平台',
+      colPlatform: '平台',
+      colProduct: '产品',
       colMatch: '产品匹配度',
       colPrice: '单价',
       colDelivery: '交货周期',

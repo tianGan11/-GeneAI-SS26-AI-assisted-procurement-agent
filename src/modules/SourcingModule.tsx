@@ -158,7 +158,39 @@ export function SourcingModule({ t }: { t: Translation }) {
                 {t.common.analysisComplete}
               </span>
             </div>
-            <ExportPrintToolbar t={t} />
+            <ExportPrintToolbar
+              t={t}
+              filename="fuyao-suppliers.xlsx"
+              sheetName="Suppliers"
+              columns={[
+                t.sourcing.colName,
+                t.sourcing.cardEstablished,
+                t.sourcing.colLocation,
+                t.sourcing.cardAddress,
+                t.sourcing.cardContact,
+                t.sourcing.colEmail,
+                t.sourcing.colWebsite,
+                t.sourcing.cardEmployees,
+                t.sourcing.cardRevenue,
+                t.sourcing.cardCapabilities,
+                t.sourcing.cardCerts,
+                t.sourcing.match,
+              ]}
+              rows={results.map((r) => [
+                r.name,
+                r.established,
+                `${r.city}, ${r.country}`,
+                r.address,
+                `${r.contactPerson} · ${r.phone}`,
+                r.email,
+                r.website,
+                r.employees,
+                r.annualRevenue,
+                r.capabilities.join('; '),
+                r.certifications.join('; '),
+                `${r.matchScore}%`,
+              ])}
+            />
           </div>
 
           {results.length === 0 ? (
