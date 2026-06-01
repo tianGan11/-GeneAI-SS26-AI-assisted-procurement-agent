@@ -1,8 +1,13 @@
+import { useState } from 'react'
 import type { ConversationRecord, Language } from '../types'
 import type { Translation } from '../i18n'
 import { useMemory } from '../context/MemoryContext'
 import { MemoryIcon } from '../components/icons'
 import { StarRating } from '../components/StarRating'
+import { ConfirmDialog } from '../components/ConfirmDialog'
+
+/** What a pending confirmation targets: one record (by id) or everything. */
+type PendingDelete = { type: 'one'; id: string } | { type: 'all' } | null
 
 function formatTime(ts: number, language: Language): string {
   return new Date(ts).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-GB', {
@@ -24,8 +29,15 @@ export function MemoryModule({
   /** Reopen a past conversation in its source module. */
   onOpen: (conv: ConversationRecord) => void
 }) {
-  const { conversations, clearAll } = useMemory()
+  const { conversations, remove, clearAll } = useMemory()
   const m = t.memory
+  const [pending, setPending] = useState<PendingDelete>(null)
+
+  const handleConfirm = () => {
+    if (pending?.type === 'one') remove(pending.id)
+    else if (pending?.type === 'all') clearAll()
+    setPending(null)
+  }
 
   return (
     <div className="space-y-5">
@@ -34,10 +46,8 @@ export function MemoryModule({
         {conversations.length > 0 && (
           <button
             type="button"
-            onClick={() => {
-              if (window.confirm(m.confirmClear)) clearAll()
-            }}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50"
+            onClick={() => setPending({ type: 'all' })}
+            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
           >
             {m.clearAll}
           </button>
@@ -93,6 +103,20 @@ export function MemoryModule({
                       <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                     </svg>
                   </span>
+                  <button
+                    type="button"
+                    aria-label={m.delete}
+                    title={m.delete}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setPending({ type: 'one', id: conv.id })
+                    }}
+                    className="rounded-md p-1.5 text-slate-300 transition-colors hover:bg-red-50 hover:text-red-600"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                    </svg>
+                  </button>
                 </div>
               </div>
 
@@ -127,6 +151,17 @@ export function MemoryModule({
             </div>
           ))}
         </div>
+      )}
+
+      {pending && (
+        <ConfirmDialog
+          title={pending.type === 'all' ? m.clearTitle : m.deleteTitle}
+          message={pending.type === 'all' ? m.confirmClear : m.confirmDelete}
+          confirmLabel={pending.type === 'all' ? m.clearAll : m.delete}
+          cancelLabel={t.common.cancel}
+          onConfirm={handleConfirm}
+          onCancel={() => setPending(null)}
+        />
       )}
     </div>
   )

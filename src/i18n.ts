@@ -121,6 +121,10 @@ export interface Translation {
     chose: string
     openHint: string
     reopen: string
+    delete: string
+    deleteTitle: string
+    confirmDelete: string
+    clearTitle: string
   }
 
   feedback: {
@@ -303,6 +307,10 @@ export const translations: Record<Language, Translation> = {
       chose: 'Chose',
       openHint: 'Click any record to reopen it in its module',
       reopen: 'Reopen',
+      delete: 'Delete',
+      deleteTitle: 'Delete record',
+      confirmDelete: 'Delete this conversation? This cannot be undone.',
+      clearTitle: 'Clear all records',
     },
     feedback: {
       title: 'Share your feedback',
@@ -481,6 +489,10 @@ export const translations: Record<Language, Translation> = {
       chose: '已选择',
       openHint: '点击任意记录可在对应模块中重新打开',
       reopen: '重新打开',
+      delete: '删除',
+      deleteTitle: '删除记录',
+      confirmDelete: '确定删除该条对话记录吗？此操作不可撤销。',
+      clearTitle: '清空全部记录',
     },
     feedback: {
       title: '分享您的反馈',

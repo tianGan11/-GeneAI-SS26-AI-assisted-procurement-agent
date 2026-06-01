@@ -8,6 +8,8 @@ interface MemoryContextValue {
   /** Logs a query + all inputs; returns the new record's id. */
   remember: (record: Omit<ConversationRecord, 'id' | 'timestamp' | 'feedback'>) => string
   attachFeedback: (conversationId: string, feedback: FeedbackRecord) => void
+  /** Deletes a single conversation by id. */
+  remove: (conversationId: string) => void
   clearAll: () => void
 }
 
@@ -47,14 +49,25 @@ export function MemoryProvider({ children }: { children: ReactNode }) {
     [persist],
   )
 
+  const remove = useCallback<MemoryContextValue['remove']>(
+    (conversationId) => {
+      setConversations((prev) => {
+        const next = prev.filter((c) => c.id !== conversationId)
+        persist(next)
+        return next
+      })
+    },
+    [persist],
+  )
+
   const clearAll = useCallback(() => {
     setConversations([])
     persist([])
   }, [persist])
 
   const value = useMemo<MemoryContextValue>(
-    () => ({ conversations, remember, attachFeedback, clearAll }),
-    [conversations, remember, attachFeedback, clearAll],
+    () => ({ conversations, remember, attachFeedback, remove, clearAll }),
+    [conversations, remember, attachFeedback, remove, clearAll],
   )
 
   return <MemoryContext.Provider value={value}>{children}</MemoryContext.Provider>
