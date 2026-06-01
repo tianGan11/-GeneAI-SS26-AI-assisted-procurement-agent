@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Language, ModuleId } from './types'
+import type { ConversationRecord, Language, ModuleId } from './types'
 import { translations } from './i18n'
 import { loadJSON, saveJSON, STORAGE_KEYS } from './lib/storage'
 import { AuthProvider, useAuth } from './context/AuthContext'
@@ -21,7 +21,19 @@ function Workspace({
 }) {
   const { user } = useAuth()
   const [activeModule, setActiveModule] = useState<ModuleId>('sourcing')
+  // A conversation queued to reopen inside its source module (from Memory).
+  const [restore, setRestore] = useState<ConversationRecord | null>(null)
   const t = translations[language]
+
+  // Manual navigation starts the module fresh; opening from Memory restores it.
+  const goToModule = (id: ModuleId) => {
+    setRestore(null)
+    setActiveModule(id)
+  }
+  const openConversation = (conv: ConversationRecord) => {
+    setRestore(conv)
+    setActiveModule(conv.module)
+  }
 
   if (!user) {
     return <LoginPage t={t} language={language} onLanguageChange={setLanguage} />
@@ -37,11 +49,17 @@ function Workspace({
         t={t}
       />
       <div className="flex min-h-0 flex-1 overflow-hidden print:overflow-visible">
-        <Sidebar active={activeModule} onChange={setActiveModule} t={t} />
+        <Sidebar active={activeModule} onChange={goToModule} t={t} />
         <main className="min-w-0 flex-1 overflow-y-auto bg-slate-100 p-8 print:overflow-visible print:p-0">
-          {activeModule === 'sourcing' && <SourcingModule t={t} />}
-          {activeModule === 'comparison' && <ComparisonModule t={t} />}
-          {activeModule === 'memory' && <MemoryModule t={t} language={language} />}
+          {activeModule === 'sourcing' && (
+            <SourcingModule t={t} restore={restore?.module === 'sourcing' ? restore : null} />
+          )}
+          {activeModule === 'comparison' && (
+            <ComparisonModule t={t} restore={restore?.module === 'comparison' ? restore : null} />
+          )}
+          {activeModule === 'memory' && (
+            <MemoryModule t={t} language={language} onOpen={openConversation} />
+          )}
           {activeModule === 'settings' && <SettingsPage t={t} language={language} />}
         </main>
       </div>

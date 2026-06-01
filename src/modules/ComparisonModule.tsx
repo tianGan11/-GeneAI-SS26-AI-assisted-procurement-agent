@@ -1,12 +1,17 @@
 import { useMemo, useState } from 'react'
 import type { Translation } from '../i18n'
-import type { ComparisonItem, ComparisonSortKey, FeedbackRecord } from '../types'
+import type {
+  ComparisonItem,
+  ComparisonSortKey,
+  ConversationRecord,
+  DeliveryOptionKey,
+  FeedbackRecord,
+} from '../types'
 import { MOCK_COMPARISON } from '../data/comparison'
 import { useMemory } from '../context/MemoryContext'
 import { StepIndicator, MatchScoreBadge, ExportPrintToolbar, AnalyzeButton } from '../components/shared'
 import { FeedbackModal } from '../components/FeedbackModal'
 
-type DeliveryOptionKey = 'unlimited' | 'within3' | 'within7'
 const DELIVERY_KEYS: DeliveryOptionKey[] = ['unlimited', 'within3', 'within7']
 const SORT_KEYS: ComparisonSortKey[] = ['match', 'price', 'delivery', 'payment']
 
@@ -41,19 +46,28 @@ function PriceInput({
   )
 }
 
-export function ComparisonModule({ t }: { t: Translation }) {
+export function ComparisonModule({
+  t,
+  restore,
+}: {
+  t: Translation
+  /** When set, the module opens pre-filled with this past conversation. */
+  restore: ConversationRecord | null
+}) {
   const c = t.comparison
   const { remember, attachFeedback } = useMemory()
+  const init = restore?.restore
 
-  const [requirement, setRequirement] = useState('')
-  const [minPrice, setMinPrice] = useState('')
-  const [maxPrice, setMaxPrice] = useState('')
-  const [deliveryTime, setDeliveryTime] = useState<DeliveryOptionKey>('unlimited')
-  const [sortKey, setSortKey] = useState<ComparisonSortKey>('match')
+  const [requirement, setRequirement] = useState(init?.query ?? '')
+  const [minPrice, setMinPrice] = useState(init?.minPrice ?? '')
+  const [maxPrice, setMaxPrice] = useState(init?.maxPrice ?? '')
+  const [deliveryTime, setDeliveryTime] = useState<DeliveryOptionKey>(init?.deliveryTime ?? 'unlimited')
+  const [sortKey, setSortKey] = useState<ComparisonSortKey>(init?.sortKey ?? 'match')
   const [currentStep, setCurrentStep] = useState(3)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [feedbackFor, setFeedbackFor] = useState<string | null>(null)
-  const [activeConversationId, setActiveConversationId] = useState<string | null>(null)
+  // Reopening a past conversation re-links feedback to that same record.
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(restore?.id ?? null)
 
   // Apply hard filters (price range + delivery time), then sort.
   const rows = useMemo(() => {
@@ -95,8 +109,9 @@ export function ComparisonModule({ t }: { t: Translation }) {
       [c.delivery]: c.deliveryOptions[deliveryTime],
       [c.sortLabel]: c.sortOptions[sortKey],
     },
+    restore: { query: requirement, minPrice, maxPrice, deliveryTime, sortKey },
     resultCount: rows.length,
-    candidateNames: rows.map((r) => r.vendor),
+    candidateNames: rows.map((row) => row.vendor),
   })
 
   const handleAnalyze = () => {

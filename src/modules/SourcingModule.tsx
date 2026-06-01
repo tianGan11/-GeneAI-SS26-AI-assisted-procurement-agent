@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Translation } from '../i18n'
-import type { Supplier, FeedbackRecord } from '../types'
+import type { Supplier, ConversationRecord, FeedbackRecord } from '../types'
 import { MOCK_SUPPLIERS } from '../data/suppliers'
 import { useMemory } from '../context/MemoryContext'
 import { StepIndicator, ExportPrintToolbar, AnalyzeButton } from '../components/shared'
@@ -86,14 +86,22 @@ function Field({ label, value, sub }: { label: string; value: string; sub?: stri
   )
 }
 
-export function SourcingModule({ t }: { t: Translation }) {
+export function SourcingModule({
+  t,
+  restore,
+}: {
+  t: Translation
+  /** When set, the module opens pre-filled with this past conversation. */
+  restore: ConversationRecord | null
+}) {
   const { remember, attachFeedback } = useMemory()
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(restore?.restore?.query ?? '')
   const [currentStep, setCurrentStep] = useState(3)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [hasRun, setHasRun] = useState(true)
   const [feedbackFor, setFeedbackFor] = useState<string | null>(null)
-  const [activeConversationId, setActiveConversationId] = useState<string | null>(null)
+  // Reopening a past conversation re-links feedback to that same record.
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(restore?.id ?? null)
 
   const results = MOCK_SUPPLIERS
 
@@ -102,6 +110,7 @@ export function SourcingModule({ t }: { t: Translation }) {
     module: 'sourcing' as const,
     query: query.trim() || '(no text — browse all suppliers)',
     filters: {},
+    restore: { query },
     resultCount: results.length,
     candidateNames: results.map((r) => r.name),
   })

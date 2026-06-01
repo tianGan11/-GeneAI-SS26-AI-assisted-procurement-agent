@@ -119,6 +119,8 @@ export interface Translation {
     clearAll: string
     confirmClear: string
     chose: string
+    openHint: string
+    reopen: string
   }
 
   feedback: {
@@ -299,6 +301,8 @@ export const translations: Record<Language, Translation> = {
       clearAll: 'Clear all',
       confirmClear: 'Clear all remembered conversations?',
       chose: 'Chose',
+      openHint: 'Click any record to reopen it in its module',
+      reopen: 'Reopen',
     },
     feedback: {
       title: 'Share your feedback',
@@ -475,6 +479,8 @@ export const translations: Record<Language, Translation> = {
       clearAll: '清空全部',
       confirmClear: '确定要清空所有记忆的对话吗？',
       chose: '已选择',
+      openHint: '点击任意记录可在对应模块中重新打开',
+      reopen: '重新打开',
     },
     feedback: {
       title: '分享您的反馈',

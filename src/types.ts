@@ -84,6 +84,8 @@ export interface ComparisonItem {
 
 export type ComparisonSortKey = 'match' | 'price' | 'delivery' | 'payment'
 
+export type DeliveryOptionKey = 'unlimited' | 'within3' | 'within7'
+
 // --- Memory + feedback -----------------------------------------------------
 
 export interface FeedbackRecord {
@@ -98,13 +100,24 @@ export interface FeedbackRecord {
   submittedAt: number
 }
 
+/** Raw input values needed to re-run / reopen a past conversation. */
+export interface ConversationRestore {
+  query: string
+  minPrice?: string
+  maxPrice?: string
+  deliveryTime?: DeliveryOptionKey
+  sortKey?: ComparisonSortKey
+}
+
 /** One logged query + everything the user typed for it. */
 export interface ConversationRecord {
   id: string
   module: Extract<ModuleId, 'sourcing' | 'comparison'>
   query: string
-  /** Raw filter values the user entered (price range, delivery, etc.). */
+  /** Human-readable filter summary for display in the memory list. */
   filters: Record<string, string>
+  /** Raw input values so the conversation can be reopened in its module. */
+  restore?: ConversationRestore
   resultCount: number
   /** Names of the candidates returned, so feedback can reference them. */
   candidateNames: string[]

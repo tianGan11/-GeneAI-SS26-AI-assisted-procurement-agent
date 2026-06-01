@@ -1,4 +1,4 @@
-import type { Language } from '../types'
+import type { ConversationRecord, Language } from '../types'
 import type { Translation } from '../i18n'
 import { useMemory } from '../context/MemoryContext'
 import { MemoryIcon } from '../components/icons'
@@ -14,14 +14,23 @@ function formatTime(ts: number, language: Language): string {
   })
 }
 
-export function MemoryModule({ t, language }: { t: Translation; language: Language }) {
+export function MemoryModule({
+  t,
+  language,
+  onOpen,
+}: {
+  t: Translation
+  language: Language
+  /** Reopen a past conversation in its source module. */
+  onOpen: (conv: ConversationRecord) => void
+}) {
   const { conversations, clearAll } = useMemory()
   const m = t.memory
 
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-500">{m.subtitle}</p>
+        <p className="text-sm text-slate-500">{m.openHint}</p>
         {conversations.length > 0 && (
           <button
             type="button"
@@ -45,7 +54,19 @@ export function MemoryModule({ t, language }: { t: Translation; language: Langua
       ) : (
         <div className="space-y-3">
           {conversations.map((conv) => (
-            <div key={conv.id} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div
+              key={conv.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => onOpen(conv)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  onOpen(conv)
+                }
+              }}
+              className="group cursor-pointer rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:border-blue-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
@@ -62,9 +83,17 @@ export function MemoryModule({ t, language }: { t: Translation; language: Langua
                   </div>
                   <p className="mt-2 text-sm text-slate-800">{conv.query}</p>
                 </div>
-                <span className="shrink-0 rounded-md bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-500">
-                  {m.resultsCol}: {conv.resultCount}
-                </span>
+                <div className="flex shrink-0 items-center gap-3">
+                  <span className="rounded-md bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-500">
+                    {m.resultsCol}: {conv.resultCount}
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 opacity-0 transition-opacity group-hover:opacity-100">
+                    {m.reopen}
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                    </svg>
+                  </span>
+                </div>
               </div>
 
               {Object.keys(conv.filters).length > 0 && (
