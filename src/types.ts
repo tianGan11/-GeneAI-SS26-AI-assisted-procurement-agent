@@ -82,9 +82,14 @@ export interface ComparisonItem {
   reviews: number
 }
 
-export type ComparisonSortKey = 'match' | 'price' | 'delivery' | 'payment'
-
 export type DeliveryOptionKey = 'unlimited' | 'within3' | 'within7'
+
+/** User-set ranking weights (percentages that always sum to 100). */
+export interface FactorWeights {
+  price: number
+  delivery: number
+  rating: number
+}
 
 // --- Memory + feedback -----------------------------------------------------
 
@@ -106,7 +111,7 @@ export interface ConversationRestore {
   minPrice?: string
   maxPrice?: string
   deliveryTime?: DeliveryOptionKey
-  sortKey?: ComparisonSortKey
+  weights?: FactorWeights
 }
 
 /** One logged query + everything the user typed for it. */

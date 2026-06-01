@@ -2,24 +2,30 @@ import { useMemo, useState } from 'react'
 import type { Translation } from '../i18n'
 import type {
   ComparisonItem,
-  ComparisonSortKey,
   ConversationRecord,
   DeliveryOptionKey,
+  FactorWeights,
   FeedbackRecord,
 } from '../types'
 import { MOCK_COMPARISON } from '../data/comparison'
 import { useMemory } from '../context/MemoryContext'
 import { StepIndicator, MatchScoreBadge, ExportPrintToolbar, AnalyzeButton } from '../components/shared'
 import { FeedbackModal } from '../components/FeedbackModal'
+import { WeightControl } from '../components/WeightControl'
 
 const DELIVERY_KEYS: DeliveryOptionKey[] = ['unlimited', 'within3', 'within7']
-const SORT_KEYS: ComparisonSortKey[] = ['match', 'price', 'delivery', 'payment']
 
-// On-account (挂帐) ranks first when sorting by payment term.
-const PAYMENT_PRIORITY: Record<ComparisonItem['paymentTerm'], number> = {
-  onAccount: 0,
-  prepayment: 1,
-  card: 2,
+// Default importance: price-led, then delivery, then reviews.
+const DEFAULT_WEIGHTS: FactorWeights = { price: 40, delivery: 35, rating: 25 }
+
+/** A quote plus its user-weighted decision score (0–100). */
+type ScoredItem = ComparisonItem & { score: number }
+
+/** Normalize a value to 0–1; higher is always better. */
+function normalize(value: number, min: number, max: number, higherIsBetter: boolean): number {
+  if (max === min) return 1
+  const t = (value - min) / (max - min)
+  return higherIsBetter ? t : 1 - t
 }
 
 function PriceInput({
@@ -62,15 +68,16 @@ export function ComparisonModule({
   const [minPrice, setMinPrice] = useState(init?.minPrice ?? '')
   const [maxPrice, setMaxPrice] = useState(init?.maxPrice ?? '')
   const [deliveryTime, setDeliveryTime] = useState<DeliveryOptionKey>(init?.deliveryTime ?? 'unlimited')
-  const [sortKey, setSortKey] = useState<ComparisonSortKey>(init?.sortKey ?? 'match')
+  const [weights, setWeights] = useState<FactorWeights>(init?.weights ?? DEFAULT_WEIGHTS)
   const [currentStep, setCurrentStep] = useState(3)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [feedbackFor, setFeedbackFor] = useState<string | null>(null)
   // Reopening a past conversation re-links feedback to that same record.
   const [activeConversationId, setActiveConversationId] = useState<string | null>(restore?.id ?? null)
 
-  // Apply hard filters (price range + delivery time), then sort.
-  const rows = useMemo(() => {
+  // Apply hard filters (price range + delivery time), then rank by the
+  // user-weighted composite score over price / delivery / reviews.
+  const rows = useMemo<ScoredItem[]>(() => {
     const min = minPrice ? Number(minPrice) : -Infinity
     const max = maxPrice ? Number(maxPrice) : Infinity
     const deliveryCap = deliveryTime === 'within3' ? 3 : deliveryTime === 'within7' ? 7 : Infinity
@@ -78,27 +85,35 @@ export function ComparisonModule({
     const filtered = MOCK_COMPARISON.filter(
       (r) => r.unitPriceEur >= min && r.unitPriceEur <= max && r.deliveryDays <= deliveryCap,
     )
+    if (filtered.length === 0) return []
 
-    const sorted = [...filtered].sort((a, b) => {
-      switch (sortKey) {
-        case 'price':
-          return a.unitPriceEur - b.unitPriceEur
-        case 'delivery':
-          return a.deliveryDays - b.deliveryDays
-        case 'payment':
-          return PAYMENT_PRIORITY[a.paymentTerm] - PAYMENT_PRIORITY[b.paymentTerm] || a.unitPriceEur - b.unitPriceEur
-        case 'match':
-        default:
-          return b.matchScore - a.matchScore
-      }
-    })
-    return sorted
-  }, [minPrice, maxPrice, deliveryTime, sortKey])
+    const prices = filtered.map((r) => r.unitPriceEur)
+    const days = filtered.map((r) => r.deliveryDays)
+    const ratings = filtered.map((r) => r.rating)
+    const minP = Math.min(...prices)
+    const maxP = Math.max(...prices)
+    const minD = Math.min(...days)
+    const maxD = Math.max(...days)
+    const minR = Math.min(...ratings)
+    const maxR = Math.max(...ratings)
 
-  const recommendedId = useMemo(() => {
-    if (rows.length === 0) return null
-    return rows.reduce((best, r) => (r.matchScore > best.matchScore ? r : best), rows[0]).id
-  }, [rows])
+    const wp = weights.price / 100
+    const wd = weights.delivery / 100
+    const wr = weights.rating / 100
+
+    return filtered
+      .map<ScoredItem>((r) => {
+        const sPrice = normalize(r.unitPriceEur, minP, maxP, false)
+        const sDelivery = normalize(r.deliveryDays, minD, maxD, false)
+        const sRating = normalize(r.rating, minR, maxR, true)
+        const score = Math.round((wp * sPrice + wd * sDelivery + wr * sRating) * 100)
+        return { ...r, score }
+      })
+      .sort((a, b) => b.score - a.score || a.unitPriceEur - b.unitPriceEur)
+  }, [minPrice, maxPrice, deliveryTime, weights])
+
+  // Top of the ranked list is the recommended pick.
+  const recommendedId = rows.length > 0 ? rows[0].id : null
 
   // Builds the memory record for the current query + all entered inputs.
   const buildRecord = () => ({
@@ -107,9 +122,9 @@ export function ComparisonModule({
     filters: {
       [c.budget]: `${minPrice || '0'} – ${maxPrice || '∞'} €`,
       [c.delivery]: c.deliveryOptions[deliveryTime],
-      [c.sortLabel]: c.sortOptions[sortKey],
+      [c.weightTitle]: `${c.weightPrice} ${weights.price}% · ${c.weightDelivery} ${weights.delivery}% · ${c.weightRating} ${weights.rating}%`,
     },
-    restore: { query: requirement, minPrice, maxPrice, deliveryTime, sortKey },
+    restore: { query: requirement, minPrice, maxPrice, deliveryTime, weights },
     resultCount: rows.length,
     candidateNames: rows.map((row) => row.vendor),
   })
@@ -178,6 +193,12 @@ export function ComparisonModule({
           </div>
         </div>
 
+        <div className="mt-4 rounded-lg bg-gray-50 px-4 py-3.5">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{c.weightTitle}</p>
+          <p className="mb-3 mt-0.5 text-xs text-slate-400">{c.weightHint}</p>
+          <WeightControl weights={weights} onChange={setWeights} t={t} />
+        </div>
+
         <div className="mt-4 flex justify-end">
           <AnalyzeButton isAnalyzing={isAnalyzing} onClick={handleAnalyze} t={t} />
         </div>
@@ -194,20 +215,6 @@ export function ComparisonModule({
             <p className="mt-0.5 text-sm text-slate-500">{t.common.resultsFound(rows.length)}</p>
           </div>
           <div className="flex flex-col items-end gap-3">
-            <div className="flex items-center gap-2 print:hidden">
-              <label className="text-xs font-medium text-slate-500">{c.sortLabel}</label>
-              <select
-                value={sortKey}
-                onChange={(e) => setSortKey(e.target.value as ComparisonSortKey)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400/30"
-              >
-                {SORT_KEYS.map((key) => (
-                  <option key={key} value={key}>
-                    {c.sortOptions[key]}
-                  </option>
-                ))}
-              </select>
-            </div>
             <ExportPrintToolbar
               t={t}
               filename="fuyao-quote-comparison.xlsx"
@@ -216,7 +223,7 @@ export function ComparisonModule({
                 c.colVendor,
                 c.colPlatform,
                 c.colProduct,
-                c.colMatch,
+                c.colScore,
                 c.colPrice,
                 c.colDelivery,
                 c.colPayment,
@@ -227,7 +234,7 @@ export function ComparisonModule({
                 r.vendor,
                 r.platform,
                 r.product,
-                `${r.matchScore}%`,
+                `${r.score}%`,
                 r.unitLabel,
                 r.deliveryLabel,
                 r.paymentLabel,
@@ -262,7 +269,7 @@ function ComparisonTable({
   t,
   onSelect,
 }: {
-  rows: ComparisonItem[]
+  rows: ScoredItem[]
   recommendedId: string | null
   t: Translation
   onSelect: (vendor: string) => void
@@ -283,7 +290,7 @@ function ComparisonTable({
             <th className={`sticky left-0 z-20 min-w-[240px] border-r border-gray-100 bg-slate-50 shadow-[2px_0_5px_rgba(0,0,0,0.03)] ${HEAD_CELL}`}>
               {c.colVendor}
             </th>
-            <th className={`min-w-[140px] ${HEAD_CELL}`}>{c.colMatch}</th>
+            <th className={`min-w-[140px] ${HEAD_CELL}`}>{c.colScore}</th>
             <th className={`min-w-[110px] ${HEAD_CELL}`}>{c.colPrice}</th>
             <th className={`min-w-[120px] ${HEAD_CELL}`}>{c.colDelivery}</th>
             <th className={`min-w-[160px] ${HEAD_CELL}`}>{c.colPayment}</th>
@@ -311,7 +318,7 @@ function ComparisonTable({
                   <p className="mt-1 text-sm text-gray-500">{row.product}</p>
                 </td>
                 <td className="px-4 py-4 align-middle">
-                  <MatchScoreBadge score={row.matchScore} />
+                  <MatchScoreBadge score={row.score} />
                 </td>
                 <td className="px-4 py-4 align-middle">
                   <span className="whitespace-nowrap text-sm font-semibold text-slate-900">{row.unitLabel}</span>

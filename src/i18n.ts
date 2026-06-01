@@ -1,4 +1,4 @@
-import type { Language, ModuleId, SupplierCategoryKey, PaymentTermKey, ComparisonSortKey } from './types'
+import type { Language, ModuleId, SupplierCategoryKey, PaymentTermKey } from './types'
 
 // ---------------------------------------------------------------------------
 // Bilingual (EN / 中文) UI strings. Domain text inside mock data stays in its
@@ -88,13 +88,17 @@ export interface Translation {
     minPrice: string
     maxPrice: string
     deliveryOptions: { unlimited: string; within3: string; within7: string }
-    sortLabel: string
-    sortOptions: Record<ComparisonSortKey, string>
+    weightTitle: string
+    weightHint: string
+    weightPrice: string
+    weightDelivery: string
+    weightRating: string
     tableTitle: string
     colVendor: string
     colPlatform: string
     colProduct: string
     colMatch: string
+    colScore: string
     colPrice: string
     colDelivery: string
     colPayment: string
@@ -266,18 +270,17 @@ export const translations: Record<Language, Translation> = {
         within3: 'Within 3 business days',
         within7: 'Within 7 business days',
       },
-      sortLabel: 'Sort by',
-      sortOptions: {
-        match: 'Match score',
-        price: 'Price: low to high',
-        delivery: 'Delivery: fastest first',
-        payment: 'Payment: on-account first',
-      },
+      weightTitle: 'Decision weights',
+      weightHint: 'Drag the wheel or sliders — results are ranked by your weighting',
+      weightPrice: 'Price',
+      weightDelivery: 'Delivery',
+      weightRating: 'Reviews',
       tableTitle: 'Decision comparison table',
       colVendor: 'Vendor / Platform',
       colPlatform: 'Platform',
       colProduct: 'Product',
       colMatch: 'Product match',
+      colScore: 'Weighted score',
       colPrice: 'Unit price',
       colDelivery: 'Lead time',
       colPayment: 'Payment method',
@@ -448,18 +451,17 @@ export const translations: Record<Language, Translation> = {
         within3: '3 个工作日内',
         within7: '7 个工作日内',
       },
-      sortLabel: '排序方式',
-      sortOptions: {
-        match: '匹配度',
-        price: '价格：从低到高',
-        delivery: '到货：从快到慢',
-        payment: '付款：挂帐优先',
-      },
+      weightTitle: '决策权重',
+      weightHint: '拖动圆环或滑块，结果将按您的权重排序',
+      weightPrice: '价格',
+      weightDelivery: '货期',
+      weightRating: '评价',
       tableTitle: '决策对比表',
       colVendor: '供应商 / 平台',
       colPlatform: '平台',
       colProduct: '产品',
       colMatch: '产品匹配度',
+      colScore: '综合得分',
       colPrice: '单价',
       colDelivery: '交货周期',
       colPayment: '付款方式',
