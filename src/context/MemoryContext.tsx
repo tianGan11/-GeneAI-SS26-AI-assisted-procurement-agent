@@ -1,31 +1,61 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { ConversationRecord, FeedbackRecord } from '../types'
 import { loadJSON, saveJSON, STORAGE_KEYS } from '../lib/storage'
+import { api, apiEnabled } from '../lib/api'
+import { useAuth } from './AuthContext'
 
 interface MemoryContextValue {
   conversations: ConversationRecord[]
-  /** Logs a query + all inputs; returns the new record's id. */
-  remember: (record: Omit<ConversationRecord, 'id' | 'timestamp' | 'feedback'>) => string
-  attachFeedback: (conversationId: string, feedback: FeedbackRecord) => void
+  /** Logs a query + all inputs; resolves to the new record's id. */
+  remember: (record: Omit<ConversationRecord, 'id' | 'timestamp' | 'feedback'>) => Promise<string>
+  attachFeedback: (conversationId: string, feedback: FeedbackRecord) => Promise<void>
   /** Deletes a single conversation by id. */
-  remove: (conversationId: string) => void
-  clearAll: () => void
+  remove: (conversationId: string) => Promise<void>
+  clearAll: () => Promise<void>
 }
 
 const MemoryContext = createContext<MemoryContextValue | null>(null)
 
 export function MemoryProvider({ children }: { children: ReactNode }) {
+  // MemoryProvider sits inside AuthProvider, so it can react to sign-in/out.
+  const { user } = useAuth()
   const [conversations, setConversations] = useState<ConversationRecord[]>(() =>
-    loadJSON<ConversationRecord[]>(STORAGE_KEYS.conversations, []),
+    apiEnabled ? [] : loadJSON<ConversationRecord[]>(STORAGE_KEYS.conversations, []),
   )
 
   const persist = useCallback((list: ConversationRecord[]) => {
-    saveJSON(STORAGE_KEYS.conversations, list)
+    if (!apiEnabled) saveJSON(STORAGE_KEYS.conversations, list)
   }, [])
 
+  // With a real backend: (re)load conversations whenever the user changes.
+  useEffect(() => {
+    if (!apiEnabled) return
+    if (!user) {
+      setConversations([])
+      return
+    }
+    let alive = true
+    api.conversations
+      .list()
+      .then((list) => {
+        if (alive) setConversations(list)
+      })
+      .catch(() => {
+        /* ignore — list stays empty */
+      })
+    return () => {
+      alive = false
+    }
+  }, [user])
+
   const remember = useCallback<MemoryContextValue['remember']>(
-    (record) => {
+    async (record) => {
+      if (apiEnabled) {
+        const created = await api.conversations.create(record)
+        setConversations((prev) => [created, ...prev])
+        return created.id
+      }
       const id = crypto.randomUUID()
       const full: ConversationRecord = { ...record, id, timestamp: Date.now() }
       setConversations((prev) => {
@@ -39,7 +69,12 @@ export function MemoryProvider({ children }: { children: ReactNode }) {
   )
 
   const attachFeedback = useCallback<MemoryContextValue['attachFeedback']>(
-    (conversationId, feedback) => {
+    async (conversationId, feedback) => {
+      if (apiEnabled) {
+        const updated = await api.conversations.attachFeedback(conversationId, feedback)
+        setConversations((prev) => prev.map((c) => (c.id === conversationId ? updated : c)))
+        return
+      }
       setConversations((prev) => {
         const next = prev.map((c) => (c.id === conversationId ? { ...c, feedback } : c))
         persist(next)
@@ -50,7 +85,8 @@ export function MemoryProvider({ children }: { children: ReactNode }) {
   )
 
   const remove = useCallback<MemoryContextValue['remove']>(
-    (conversationId) => {
+    async (conversationId) => {
+      if (apiEnabled) await api.conversations.remove(conversationId)
       setConversations((prev) => {
         const next = prev.filter((c) => c.id !== conversationId)
         persist(next)
@@ -60,7 +96,8 @@ export function MemoryProvider({ children }: { children: ReactNode }) {
     [persist],
   )
 
-  const clearAll = useCallback(() => {
+  const clearAll = useCallback<MemoryContextValue['clearAll']>(async () => {
+    if (apiEnabled) await api.conversations.clear()
     setConversations([])
     persist([])
   }, [persist])
