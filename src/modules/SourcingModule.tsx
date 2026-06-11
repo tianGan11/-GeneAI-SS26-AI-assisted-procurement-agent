@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Translation } from '../i18n'
 import type { Supplier, ConversationRecord, FeedbackRecord } from '../types'
 import { MOCK_SUPPLIERS } from '../data/suppliers'
+import { api, apiEnabled } from '../lib/api'
 import { useMemory } from '../context/MemoryContext'
 import { StepIndicator, ExportPrintToolbar, AnalyzeButton } from '../components/shared'
 import { FeedbackModal } from '../components/FeedbackModal'
@@ -96,42 +97,55 @@ export function SourcingModule({
 }) {
   const { remember, attachFeedback } = useMemory()
   const [query, setQuery] = useState(restore?.restore?.query ?? '')
+  // Mock mode shows the seed suppliers immediately; API mode waits for a search.
+  const [results, setResults] = useState<Supplier[]>(apiEnabled ? [] : MOCK_SUPPLIERS)
   const [currentStep, setCurrentStep] = useState(3)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [hasRun, setHasRun] = useState(true)
+  const [hasRun, setHasRun] = useState(!apiEnabled)
   const [feedbackFor, setFeedbackFor] = useState<string | null>(null)
   // Reopening a past conversation re-links feedback to that same record.
   const [activeConversationId, setActiveConversationId] = useState<string | null>(restore?.id ?? null)
 
-  const results = MOCK_SUPPLIERS
-
   // Builds the memory record for the current query + all entered inputs.
-  const buildRecord = () => ({
+  const buildRecord = (list: Supplier[]) => ({
     module: 'sourcing' as const,
     query: query.trim() || '(no text — browse all suppliers)',
     filters: {},
     restore: { query },
-    resultCount: results.length,
-    candidateNames: results.map((r) => r.name),
+    resultCount: list.length,
+    candidateNames: list.map((r) => r.name),
   })
 
-  const handleAnalyze = () => {
+  const handleAnalyze = async () => {
     setIsAnalyzing(true)
     setHasRun(true)
     setCurrentStep(1)
     setTimeout(() => setCurrentStep(2), 700)
     setTimeout(() => setCurrentStep(3), 1400)
-    setTimeout(() => {
-      setIsAnalyzing(false)
-      setActiveConversationId(remember(buildRecord()))
-    }, 1800)
+
+    let list = results
+    if (apiEnabled) {
+      try {
+        const res = await api.sourcing.search(query)
+        list = res.results
+      } catch {
+        list = []
+      }
+      setResults(list)
+    } else {
+      // Keep the step animation visible in mock mode.
+      await new Promise((r) => setTimeout(r, 1800))
+    }
+
+    setIsAnalyzing(false)
+    setActiveConversationId(await remember(buildRecord(list)))
   }
 
-  const handleFeedbackSubmit = (feedback: FeedbackRecord) => {
+  const handleFeedbackSubmit = async (feedback: FeedbackRecord) => {
     // Lazily create a conversation if feedback is given before running analysis.
-    const id = activeConversationId ?? remember(buildRecord())
+    const id = activeConversationId ?? (await remember(buildRecord(results)))
     setActiveConversationId(id)
-    attachFeedback(id, feedback)
+    await attachFeedback(id, feedback)
   }
 
   return (

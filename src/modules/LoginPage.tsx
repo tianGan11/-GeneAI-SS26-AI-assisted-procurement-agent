@@ -18,15 +18,32 @@ export function LoginPage({
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
 
   const canSubmit = email.includes('@') && password.length > 0 && !submitting
+
+  // On success the user state flips and this whole page unmounts, so we only
+  // reset `submitting` on failure.
+  const submit = async (emailValue: string, passwordValue: string) => {
+    setSubmitting(true)
+    setError('')
+    try {
+      await login(emailValue, passwordValue)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Sign in failed')
+      setSubmitting(false)
+    }
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!canSubmit) return
-    setSubmitting(true)
-    // MOCK sign-in — replace with a real IdP / OAuth exchange.
-    setTimeout(() => login(email.trim()), 700)
+    void submit(email.trim(), password)
+  }
+
+  const handleSso = () => {
+    // Mock SSO shortcut (no real IdP wired yet).
+    void submit(email.includes('@') ? email.trim() : 'sso.user@fuyao-europe.com', password || 'sso-demo')
   }
 
   return (
@@ -102,6 +119,10 @@ export function LoginPage({
                   t.login.signIn
                 )}
               </button>
+
+              {error && (
+                <p className="rounded-lg bg-red-50 px-3 py-2 text-center text-sm text-red-600">{error}</p>
+              )}
             </form>
 
             <div className="my-5 flex items-center gap-3 text-xs text-slate-400">
@@ -112,8 +133,9 @@ export function LoginPage({
 
             <button
               type="button"
-              onClick={() => email.includes('@') ? login(email.trim()) : login('sso.user@fuyao-europe.com')}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+              onClick={handleSso}
+              disabled={submitting}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <ShieldIcon className="h-4 w-4 text-blue-600" />
               {t.login.sso}

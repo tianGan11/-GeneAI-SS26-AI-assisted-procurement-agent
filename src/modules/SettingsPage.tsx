@@ -23,12 +23,16 @@ export function SettingsPage({ t, language }: { t: Translation; language: Langua
   const [secret, setSecret] = useState('')
   const [justSaved, setJustSaved] = useState(false)
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!label.trim() || !secret.trim()) return
-    saveVaultKey(label.trim(), secret.trim())
-    setSecret('')
-    setJustSaved(true)
-    setTimeout(() => setJustSaved(false), 1500)
+    try {
+      await saveVaultKey(label.trim(), secret.trim())
+      setSecret('')
+      setJustSaved(true)
+      setTimeout(() => setJustSaved(false), 1500)
+    } catch {
+      alert('Failed to save key. Please try again.')
+    }
   }
 
   return (

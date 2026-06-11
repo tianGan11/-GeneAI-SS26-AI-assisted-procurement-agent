@@ -8,6 +8,7 @@ import type {
   FeedbackRecord,
 } from '../types'
 import { MOCK_COMPARISON } from '../data/comparison'
+import { api, apiEnabled } from '../lib/api'
 import { useMemory } from '../context/MemoryContext'
 import { StepIndicator, MatchScoreBadge, ExportPrintToolbar, AnalyzeButton } from '../components/shared'
 import { FeedbackModal } from '../components/FeedbackModal'
@@ -21,11 +22,58 @@ const DEFAULT_WEIGHTS: FactorWeights = { price: 40, delivery: 35, rating: 25 }
 /** A quote plus its user-weighted decision score (0–100). */
 type ScoredItem = ComparisonItem & { score: number }
 
+interface RankOptions {
+  minPrice: string
+  maxPrice: string
+  deliveryTime: DeliveryOptionKey
+  weights: FactorWeights
+}
+
 /** Normalize a value to 0–1; higher is always better. */
 function normalize(value: number, min: number, max: number, higherIsBetter: boolean): number {
   if (max === min) return 1
   const t = (value - min) / (max - min)
   return higherIsBetter ? t : 1 - t
+}
+
+/**
+ * Apply hard filters (price range + delivery time), then rank by the
+ * user-weighted composite score over price / delivery / reviews.
+ * Pure function — used both for rendering and for logging to memory.
+ */
+function rankItems(items: ComparisonItem[], { minPrice, maxPrice, deliveryTime, weights }: RankOptions): ScoredItem[] {
+  const min = minPrice ? Number(minPrice) : -Infinity
+  const max = maxPrice ? Number(maxPrice) : Infinity
+  const deliveryCap = deliveryTime === 'within3' ? 3 : deliveryTime === 'within7' ? 7 : Infinity
+
+  const filtered = items.filter(
+    (r) => r.unitPriceEur >= min && r.unitPriceEur <= max && r.deliveryDays <= deliveryCap,
+  )
+  if (filtered.length === 0) return []
+
+  const prices = filtered.map((r) => r.unitPriceEur)
+  const days = filtered.map((r) => r.deliveryDays)
+  const ratings = filtered.map((r) => r.rating)
+  const minP = Math.min(...prices)
+  const maxP = Math.max(...prices)
+  const minD = Math.min(...days)
+  const maxD = Math.max(...days)
+  const minR = Math.min(...ratings)
+  const maxR = Math.max(...ratings)
+
+  const wp = weights.price / 100
+  const wd = weights.delivery / 100
+  const wr = weights.rating / 100
+
+  return filtered
+    .map<ScoredItem>((r) => {
+      const sPrice = normalize(r.unitPriceEur, minP, maxP, false)
+      const sDelivery = normalize(r.deliveryDays, minD, maxD, false)
+      const sRating = normalize(r.rating, minR, maxR, true)
+      const score = Math.round((wp * sPrice + wd * sDelivery + wr * sRating) * 100)
+      return { ...r, score }
+    })
+    .sort((a, b) => b.score - a.score || a.unitPriceEur - b.unitPriceEur)
 }
 
 function PriceInput({
@@ -69,54 +117,24 @@ export function ComparisonModule({
   const [maxPrice, setMaxPrice] = useState(init?.maxPrice ?? '')
   const [deliveryTime, setDeliveryTime] = useState<DeliveryOptionKey>(init?.deliveryTime ?? 'unlimited')
   const [weights, setWeights] = useState<FactorWeights>(init?.weights ?? DEFAULT_WEIGHTS)
+  // Mock mode ranks the seed quotes immediately; API mode waits for a search.
+  const [items, setItems] = useState<ComparisonItem[]>(apiEnabled ? [] : MOCK_COMPARISON)
   const [currentStep, setCurrentStep] = useState(3)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [feedbackFor, setFeedbackFor] = useState<string | null>(null)
   // Reopening a past conversation re-links feedback to that same record.
   const [activeConversationId, setActiveConversationId] = useState<string | null>(restore?.id ?? null)
 
-  // Apply hard filters (price range + delivery time), then rank by the
-  // user-weighted composite score over price / delivery / reviews.
-  const rows = useMemo<ScoredItem[]>(() => {
-    const min = minPrice ? Number(minPrice) : -Infinity
-    const max = maxPrice ? Number(maxPrice) : Infinity
-    const deliveryCap = deliveryTime === 'within3' ? 3 : deliveryTime === 'within7' ? 7 : Infinity
-
-    const filtered = MOCK_COMPARISON.filter(
-      (r) => r.unitPriceEur >= min && r.unitPriceEur <= max && r.deliveryDays <= deliveryCap,
-    )
-    if (filtered.length === 0) return []
-
-    const prices = filtered.map((r) => r.unitPriceEur)
-    const days = filtered.map((r) => r.deliveryDays)
-    const ratings = filtered.map((r) => r.rating)
-    const minP = Math.min(...prices)
-    const maxP = Math.max(...prices)
-    const minD = Math.min(...days)
-    const maxD = Math.max(...days)
-    const minR = Math.min(...ratings)
-    const maxR = Math.max(...ratings)
-
-    const wp = weights.price / 100
-    const wd = weights.delivery / 100
-    const wr = weights.rating / 100
-
-    return filtered
-      .map<ScoredItem>((r) => {
-        const sPrice = normalize(r.unitPriceEur, minP, maxP, false)
-        const sDelivery = normalize(r.deliveryDays, minD, maxD, false)
-        const sRating = normalize(r.rating, minR, maxR, true)
-        const score = Math.round((wp * sPrice + wd * sDelivery + wr * sRating) * 100)
-        return { ...r, score }
-      })
-      .sort((a, b) => b.score - a.score || a.unitPriceEur - b.unitPriceEur)
-  }, [minPrice, maxPrice, deliveryTime, weights])
+  const rows = useMemo<ScoredItem[]>(
+    () => rankItems(items, { minPrice, maxPrice, deliveryTime, weights }),
+    [items, minPrice, maxPrice, deliveryTime, weights],
+  )
 
   // Top of the ranked list is the recommended pick.
   const recommendedId = rows.length > 0 ? rows[0].id : null
 
   // Builds the memory record for the current query + all entered inputs.
-  const buildRecord = () => ({
+  const buildRecord = (ranked: ScoredItem[]) => ({
     module: 'comparison' as const,
     query: requirement.trim() || '(no text — filter browse)',
     filters: {
@@ -125,26 +143,44 @@ export function ComparisonModule({
       [c.weightTitle]: `${c.weightPrice} ${weights.price}% · ${c.weightDelivery} ${weights.delivery}% · ${c.weightRating} ${weights.rating}%`,
     },
     restore: { query: requirement, minPrice, maxPrice, deliveryTime, weights },
-    resultCount: rows.length,
-    candidateNames: rows.map((row) => row.vendor),
+    resultCount: ranked.length,
+    candidateNames: ranked.map((row) => row.vendor),
   })
 
-  const handleAnalyze = () => {
+  const handleAnalyze = async () => {
     setIsAnalyzing(true)
     setCurrentStep(1)
     setTimeout(() => setCurrentStep(2), 700)
     setTimeout(() => setCurrentStep(3), 1400)
-    setTimeout(() => {
-      setIsAnalyzing(false)
-      setActiveConversationId(remember(buildRecord()))
-    }, 1800)
+
+    let list = items
+    if (apiEnabled) {
+      try {
+        const res = await api.comparison.search(requirement, {
+          minPrice: minPrice ? Number(minPrice) : undefined,
+          maxPrice: maxPrice ? Number(maxPrice) : undefined,
+          deliveryTime,
+        })
+        list = res.results
+      } catch {
+        list = []
+      }
+      setItems(list)
+    } else {
+      // Keep the step animation visible in mock mode.
+      await new Promise((r) => setTimeout(r, 1800))
+    }
+
+    setIsAnalyzing(false)
+    const ranked = rankItems(list, { minPrice, maxPrice, deliveryTime, weights })
+    setActiveConversationId(await remember(buildRecord(ranked)))
   }
 
-  const handleFeedbackSubmit = (feedback: FeedbackRecord) => {
+  const handleFeedbackSubmit = async (feedback: FeedbackRecord) => {
     // Lazily create a conversation if feedback is given before running analysis.
-    const id = activeConversationId ?? remember(buildRecord())
+    const id = activeConversationId ?? (await remember(buildRecord(rows)))
     setActiveConversationId(id)
-    attachFeedback(id, feedback)
+    await attachFeedback(id, feedback)
   }
 
   return (

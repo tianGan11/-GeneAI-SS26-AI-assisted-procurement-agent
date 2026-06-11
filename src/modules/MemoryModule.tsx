@@ -34,8 +34,8 @@ export function MemoryModule({
   const [pending, setPending] = useState<PendingDelete>(null)
 
   const handleConfirm = () => {
-    if (pending?.type === 'one') remove(pending.id)
-    else if (pending?.type === 'all') clearAll()
+    if (pending?.type === 'one') void remove(pending.id)
+    else if (pending?.type === 'all') void clearAll()
     setPending(null)
   }
 
