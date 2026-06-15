@@ -1,0 +1,29 @@
+# ProcureAI Backend
+# FastAPI + LangChain + ChromaDB + DSPy
+
+# Web framework
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+
+# Agent framework
+langchain>=0.3.0
+langchain-openai>=0.2.0
+langchain-community>=0.3.0
+
+# Vector database (local embedding + retrieval)
+chromadb>=0.5.0
+sentence-transformers>=3.2.0
+
+# LLM (OpenAI-compatible API)
+openai>=1.55.0
+
+# DSPy for prompt optimization
+dspy-ai>=2.5.0
+
+# Web search fallback
+duckduckgo-search>=6.3.0
+
+# Utilities
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+httpx>=0.28.0
