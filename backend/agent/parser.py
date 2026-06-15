@@ -17,78 +17,67 @@ class ProcurementIntent(BaseModel):
 
 CATEGORY_KEYWORDS: dict[str, set[str]] = {
     "glassAdhesive": {
-        "glass adhesive",
-        "windshield adhesive",
-        "windscreen adhesive",
-        "urethane",
-        "polyurethane",
-        "terason",
-        "teroson",
-        "sikatack",
-        "玻璃胶",
-        "挡风玻璃胶",
-        "结构胶",
-        "klebstoff",
-        "glas-klebstoff",
-        "scheibenkleber",
+        "glass adhesive", "windshield adhesive", "windscreen adhesive",
+        "urethane", "polyurethane", "teroson", "sikatack",
+        "玻璃胶", "挡风玻璃胶", "结构胶",
+        "klebstoff", "glas-klebstoff", "scheibenkleber",
     },
     "rubberSeal": {
-        "rubber seal",
-        "weatherstrip",
-        "seal",
-        "sealing profile",
-        "epdm",
-        "密封条",
-        "dichtungsprofil",
-        "dichtung",
+        "rubber seal", "weatherstrip", "seal", "sealing profile", "epdm",
+        "密封条", "dichtungsprofil", "dichtung",
     },
     "waterDeflector": {
-        "water deflector",
-        "beltline",
-        "water shield",
-        "挡水条",
-        "wasserabweiser",
+        "water deflector", "beltline", "water shield",
+        "挡水条", "wasserabweiser",
     },
     "glassRaw": {
-        "float glass",
-        "raw glass",
-        "automotive glass",
-        "玻璃原片",
-        "floatglas",
+        "float glass", "raw glass", "automotive glass",
+        "玻璃原片", "floatglas",
     },
     "hardware": {
-        "hardware",
-        "fastener",
-        "rivet",
-        "bolt",
-        "nut",
-        "五金",
-        "beschläge",
-        "befestigung",
+        "hardware", "fastener", "rivet", "bolt", "nut",
+        "五金", "beschläge", "befestigung",
+        "laptop", "笔记本", "电脑", "computer",
+        "monitor", "显示器", "docking",
+        "headset", "耳机", "手机", "phone", "iphone", "workstation",
+        "打印机",
     },
     "packaging": {
-        "packaging",
-        "box",
-        "carton",
-        "corrugated",
-        "包装",
-        "verpackung",
+        "packaging", "box", "carton", "corrugated",
+        "包装", "verpackung",
+    },
+    "cleaning": {
+        "cleaning", "清洁", "reinigung", "洗涤", "洗洁精",
+        "spülmittel", "geschirr", "toilettenpapier", "küchenrolle",
+        "垃圾袋", "müllbeutel", "清洁用品",
+    },
+    "office": {
+        "office", "办公", "纸", "papier", "文件夹", "ordner",
+        "打印", "drucker", "büro", "laminier", "塑封",
+        "标签", "etiketten", "print", "copy",
+    },
+    "safetyShoes": {
+        "safety shoe", "sicherheitsschuh", "安全鞋", "schutzschuh",
+        "uvex", "s1", "s3",
+    },
+    "firstAid": {
+        "first aid", "急救", "erste hilfe",
+        "verband", "pflaster", "augenspül", "rettungsdecke",
+        "sanitäter", "medical", "绷带", "创可贴", "消毒",
+    },
+    "equipment": {
+        "equipment", "设备", "ausrüstung",
+        "pneumatic", "气动", "ventil", "接头", "anschluss",
+        "schlauch", "管箍", "dichtring", "密封圈",
+        "festo", "工业", "maschine", "工厂",
     },
 }
 
 COUNTRY_ALIASES = {
-    "germany": "Germany",
-    "deutschland": "Germany",
-    "德国": "Germany",
-    "france": "France",
-    "frankreich": "France",
-    "法国": "France",
-    "italy": "Italy",
-    "italien": "Italy",
-    "意大利": "Italy",
-    "europe": "Europe",
-    "eu": "Europe",
-    "欧洲": "Europe",
+    "germany": "Germany", "deutschland": "Germany", "德国": "Germany",
+    "france": "France", "frankreich": "France", "法国": "France",
+    "italy": "Italy", "italien": "Italy", "意大利": "Italy",
+    "europe": "Europe", "eu": "Europe", "欧洲": "Europe",
 }
 
 
@@ -100,8 +89,9 @@ class IntentParser:
         prompt = (
             "Extract procurement search intent from the user's Chinese, English, or German query. "
             "Identify category using one of: glassAdhesive, rubberSeal, waterDeflector, "
-            "glassRaw, hardware, packaging. Extract country, required certifications, "
-            "maximum unit price in EUR, maximum delivery days, and concise search keywords. "
+            "glassRaw, hardware, packaging, cleaning, office, safetyShoes, firstAid, equipment. "
+            "Extract country, required certifications, maximum unit price in EUR, "
+            "maximum delivery days, and concise search keywords. "
             f"Query: {query}"
         )
 
@@ -139,12 +129,8 @@ class IntentParser:
         max_delivery_days = self._extract_delivery_days(normalized)
         keywords = self._extract_keywords(query, category, country, certifications)
         return ProcurementIntent(
-            category=category,
-            country=country,
-            certifications=certifications,
-            max_price=max_price,
-            max_delivery_days=max_delivery_days,
-            keywords=keywords,
+            category=category, country=country, certifications=certifications,
+            max_price=max_price, max_delivery_days=max_delivery_days, keywords=keywords,
         )
 
     @staticmethod
@@ -163,7 +149,10 @@ class IntentParser:
 
     @staticmethod
     def _extract_certifications(query: str) -> list[str]:
-        matches = re.findall(r"\b(?:IATF\s*16949|ISO\s*\d{4,5}|FSC|IATF(?=认证|证书|标准|要求|必备|必须|需要|审核|审核通过))", query, flags=re.IGNORECASE)
+        matches = re.findall(
+            r"\b(?:IATF\s*16949|ISO\s*\d{4,5}|FSC|IATF(?=认证|证书|标准|要求|必备|必须|需要|审核|审核通过))",
+            query, flags=re.IGNORECASE,
+        )
         normalized = []
         for m in matches:
             m = m.upper().replace("  ", " ")
@@ -205,20 +194,9 @@ class IntentParser:
     ) -> list[str]:
         words = re.findall(r"[\w\u4e00-\u9fffäöüÄÖÜß+-]+", query)
         stop_words = {
-            "find",
-            "supplier",
-            "suppliers",
-            "vendor",
-            "vendors",
-            "in",
-            "with",
-            "the",
-            "a",
-            "an",
-            "and",
-            "or",
-            "我要找",
-            "供应商",
+            "find", "supplier", "suppliers", "vendor", "vendors",
+            "in", "with", "the", "a", "an", "and", "or",
+            "我要找", "供应商",
         }
         keywords = [word for word in words if len(word) > 2 and word.lower() not in stop_words]
         if category:
