@@ -1,0 +1,19 @@
+# Render 部署配置
+# 自动部署: 推代码 → Render 自动构建 + 上线
+
+services:
+  - type: web
+    name: procureai-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false  # 手动在 Render 面板填入
+      - key: LLM_MODEL
+        value: gpt-4o
+      - key: EMBEDDING_MODEL
+        value: BAAI/bge-m3
+      - key: CHROMA_PERSIST_DIR
+        value: /tmp/chroma_data

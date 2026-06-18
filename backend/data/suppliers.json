@@ -1,0 +1,716 @@
+[
+  {
+    "id": "sup-1",
+    "name": "Henkel AG & Co. KGaA",
+    "category": "glassAdhesive",
+    "country": "Germany",
+    "city": "Düsseldorf",
+    "description": "Global leader in adhesives, automotive polyurethane windscreen adhesives (Teroson), primerless direct-glazing systems, OEM-approved cure profiles",
+    "products": [
+      "Teroson PU 8597 HMLC",
+      "Teroson PU 9225",
+      "Primer 207 Glass Activator"
+    ],
+    "certifications": [
+      "IATF 16949",
+      "ISO 9001",
+      "ISO 14001"
+    ],
+    "contactPerson": "Markus Bauer",
+    "phone": "+49 211 797 0",
+    "email": "automotive@henkel.com",
+    "website": "www.henkel-adhesives.com",
+    "employees": "50000+",
+    "annualRevenue": "€ 22B+",
+    "established": 1876,
+    "capabilities": [
+      "Polyurethane windscreen adhesives",
+      "Primerless direct-glazing",
+      "High-modulus structural bonding",
+      "OEM-approved cure profiles"
+    ],
+    "matchScore": 97
+  },
+  {
+    "id": "sup-2",
+    "name": "Sika Automotive GmbH",
+    "category": "glassAdhesive",
+    "country": "Germany",
+    "city": "Hamburg",
+    "description": "Automotive bonding and sealing specialist offering SikaTack windscreen adhesives, crash-safe direct glazing, acoustic bonding, and local technical support for vehicle glass installation.",
+    "products": [
+      "SikaTack MOVE IT",
+      "SikaTack PRO",
+      "Sika Aktivator PRO"
+    ],
+    "certifications": [
+      "IATF 16949",
+      "ISO 9001",
+      "ISO 14001"
+    ],
+    "contactPerson": "Stefan Krüger",
+    "phone": "+49 40 540 020",
+    "email": "automotive.de@de.sika.com",
+    "website": "www.sika.com/automotive",
+    "employees": "33000+",
+    "annualRevenue": "CHF 11B+",
+    "established": 1910,
+    "capabilities": [
+      "Direct glazing adhesives",
+      "Crash-safe glass bonding",
+      "Acoustic sealing",
+      "Automotive repair systems"
+    ],
+    "matchScore": 94
+  },
+  {
+    "id": "sup-3",
+    "name": "CQLT SaarGummi Technologies S.à r.l.",
+    "category": "rubberSeal",
+    "country": "Germany",
+    "city": "Wadern-Büschfeld",
+    "description": "Automotive sealing systems manufacturer focused on EPDM profiles, door seals, window channels, glass run systems, and complex weatherstrip assemblies for OEM platforms.",
+    "products": [
+      "EPDM Door Seal",
+      "Glass Run Channel",
+      "Trunk Lid Weatherstrip"
+    ],
+    "certifications": [
+      "IATF 16949",
+      "ISO 9001",
+      "ISO 14001"
+    ],
+    "contactPerson": "Anna Schneider",
+    "phone": "+49 6874 69 0",
+    "email": "sales@saar-gummi.com",
+    "website": "www.saar-gummi.com",
+    "employees": "6000+",
+    "annualRevenue": "€ 700M+",
+    "established": 1947,
+    "capabilities": [
+      "EPDM extrusion",
+      "Co-extruded rubber seals",
+      "Glass run channels",
+      "OEM weatherstrip programs"
+    ],
+    "matchScore": 91
+  },
+  {
+    "id": "sup-4",
+    "name": "Cooper Standard France SAS",
+    "category": "waterDeflector",
+    "country": "France",
+    "city": "Rennes",
+    "description": "Tier-one automotive sealing and fluid handling supplier with European production for water deflectors, beltline seals, body sealing, and molded rubber-plastic components.",
+    "products": [
+      "Door Water Deflector",
+      "Beltline Seal",
+      "Body Side Weatherstrip"
+    ],
+    "certifications": [
+      "IATF 16949",
+      "ISO 9001",
+      "ISO 14001"
+    ],
+    "contactPerson": "Claire Martin",
+    "phone": "+33 2 99 00 50 00",
+    "email": "france.sales@cooperstandard.com",
+    "website": "www.cooperstandard.com",
+    "employees": "23000+",
+    "annualRevenue": "US$ 2.8B+",
+    "established": 1960,
+    "capabilities": [
+      "Water deflector systems",
+      "Beltline sealing",
+      "Molded rubber components",
+      "European OEM logistics"
+    ],
+    "matchScore": 89
+  },
+  {
+    "id": "sup-5",
+    "name": "Şişecam Automotive",
+    "category": "glassRaw",
+    "country": "Italy",
+    "city": "San Giorgio di Nogaro",
+    "description": "Automotive glass and float glass supplier serving European vehicle programs with laminated, tempered, coated, and raw glass substrates for further processing.",
+    "products": [
+      "Automotive Float Glass",
+      "Laminated Windscreen Glass",
+      "Tempered Side Glass"
+    ],
+    "certifications": [
+      "IATF 16949",
+      "ISO 9001",
+      "ISO 14001"
+    ],
+    "contactPerson": "Luca Moretti",
+    "phone": "+39 0431 620 111",
+    "email": "automotive@sisecam.com",
+    "website": "www.sisecam.com.tr/en/automotive",
+    "employees": "24000+",
+    "annualRevenue": "US$ 4B+",
+    "established": 1935,
+    "capabilities": [
+      "Float glass production",
+      "Laminated automotive glass",
+      "Tempered glazing",
+      "Solar-control coatings"
+    ],
+    "matchScore": 88
+  },
+  {
+    "id": "sup-6",
+    "name": "Wilhelm Böllhoff GmbH & Co. KG",
+    "category": "hardware",
+    "country": "Germany",
+    "city": "Bielefeld",
+    "description": "Fastening and assembly technology supplier for automotive programs, including threaded inserts, rivet nuts, blind rivets, and joining systems for mixed-material assemblies.",
+    "products": [
+      "RIVKLE Blind Rivet Nut",
+      "HELICOIL Thread Insert",
+      "RIVQUICK Blind Rivet"
+    ],
+    "certifications": [
+      "IATF 16949",
+      "ISO 9001",
+      "ISO 14001"
+    ],
+    "contactPerson": "Thomas Weber",
+    "phone": "+49 521 4482 0",
+    "email": "automotive@boellhoff.com",
+    "website": "www.boellhoff.com",
+    "employees": "3600+",
+    "annualRevenue": "€ 780M+",
+    "established": 1877,
+    "capabilities": [
+      "Automotive fasteners",
+      "Thread repair systems",
+      "Rivet nut joining",
+      "Assembly engineering support"
+    ],
+    "matchScore": 86
+  },
+  {
+    "id": "sup-7",
+    "name": "DS Smith Packaging Deutschland Stiftung & Co. KG",
+    "category": "packaging",
+    "country": "Germany",
+    "city": "Nürnberg",
+    "description": "Sustainable packaging supplier with corrugated transport packaging, returnable logistics concepts, automotive parts protection, and design support for European supply chains.",
+    "products": [
+      "Corrugated Transport Box",
+      "Automotive Parts Insert",
+      "Returnable Packaging System"
+    ],
+    "certifications": [
+      "ISO 9001",
+      "ISO 14001",
+      "FSC"
+    ],
+    "contactPerson": "Julia Hoffmann",
+    "phone": "+49 911 955 40",
+    "email": "packaging.de@dssmith.com",
+    "website": "www.dssmith.com",
+    "employees": "30000+",
+    "annualRevenue": "£ 7B+",
+    "established": 1940,
+    "capabilities": [
+      "Corrugated packaging",
+      "Automotive part protection",
+      "Sustainable materials",
+      "Packaging design optimization"
+    ],
+    "matchScore": 84
+  },
+  {
+    "id": "sup-10632c29",
+    "name": "DM-drogerie markt",
+    "category": "cleaning",
+    "country": "Germany",
+    "city": "Karlsruhe",
+    "description": "德国最大日化连锁超市，提供清洁用品、办公耗材、日用品，门店遍布德国",
+    "products": [
+      "Küchenrolle",
+      "Spülmittel",
+      "Geschirrschwämme",
+      "Spülmaschinen-Tabs",
+      "Klarspüler",
+      "WC-Reiniger",
+      "Stahlwolle",
+      "Reinigungstuch"
+    ],
+    "certifications": [],
+    "contactPerson": "",
+    "phone": "",
+    "email": "",
+    "website": "www.dm.de",
+    "employees": "41000+",
+    "annualRevenue": "€ 12B+",
+    "established": 0,
+    "capabilities": [
+      "Küchenrolle",
+      "Spülmittel",
+      "Geschirrschwämme",
+      "Spülmaschinen-Tabs",
+      "Klarspüler",
+      "WC-Reiniger",
+      "Stahlwolle",
+      "Reinigungstuch"
+    ],
+    "matchScore": 92
+  },
+  {
+    "id": "sup-9df0c553",
+    "name": "Layer-Chemie GmbH",
+    "category": "cleaning",
+    "country": "Germany",
+    "city": "Wuppertal",
+    "description": "专业清洁和卫生用品供应商，提供工业级卫生纸、垃圾袋、擦手纸",
+    "products": [
+      "TOP Mini Jumbo Toilettenpapier",
+      "TOP StückAbfallsäcke",
+      "TOP Special Falthandtücher",
+      "TORK Premium Seifencreme"
+    ],
+    "certifications": [],
+    "contactPerson": "",
+    "phone": "",
+    "email": "",
+    "website": "www.layer-chemie.de",
+    "employees": "",
+    "annualRevenue": "",
+    "established": 0,
+    "capabilities": [
+      "TOP Mini Jumbo Toilettenpapier",
+      "TOP StückAbfallsäcke",
+      "TOP Special Falthandtücher",
+      "TORK Premium Seifencreme"
+    ],
+    "matchScore": 85
+  },
+  {
+    "id": "sup-ae77dbd4",
+    "name": "Amazon DE",
+    "category": "cleaning",
+    "country": "Germany",
+    "city": "",
+    "description": "Amazon德国站，线上综合零售平台",
+    "products": [
+      "Küchenrolle 32 Rollen"
+    ],
+    "certifications": [],
+    "contactPerson": "",
+    "phone": "",
+    "email": "",
+    "website": "www.amazon.de",
+    "employees": "",
+    "annualRevenue": "",
+    "established": 0,
+    "capabilities": [
+      "Küchenrolle 32 Rollen"
+    ],
+    "matchScore": 78
+  },
+  {
+    "id": "sup-8c0cf796",
+    "name": "Seel GmbH",
+    "category": "office",
+    "country": "Germany",
+    "city": "",
+    "description": "德国办公纸张供应商",
+    "products": [
+      "Kopierpapier A4"
+    ],
+    "certifications": [],
+    "contactPerson": "",
+    "phone": "",
+    "email": "",
+    "website": "",
+    "employees": "",
+    "annualRevenue": "",
+    "established": 0,
+    "capabilities": [
+      "Kopierpapier A4"
+    ],
+    "matchScore": 75
+  },
+  {
+    "id": "sup-e91ed8be",
+    "name": "Bechtle AG",
+    "category": "hardware",
+    "country": "Germany",
+    "city": "Neckarsulm",
+    "description": "德国最大IT系统集成商，提供企业级硬件采购、IT基础设施和云服务",
+    "products": [
+      "HP EliteBook",
+      "HP ZBook",
+      "HP Dock",
+      "Monitor"
+    ],
+    "certifications": [],
+    "contactPerson": "",
+    "phone": "",
+    "email": "",
+    "website": "www.bechtle.com",
+    "employees": "14000+",
+    "annualRevenue": "€ 6B+",
+    "established": 0,
+    "capabilities": [
+      "HP EliteBook",
+      "HP ZBook",
+      "HP Dock",
+      "Monitor"
+    ],
+    "matchScore": 92
+  },
+  {
+    "id": "sup-3271da20",
+    "name": "Böttcher AG",
+    "category": "hardware",
+    "country": "Germany",
+    "city": "Jena",
+    "description": "德国IT和办公设备批发商，提供电脑、打印耗材、办公用品",
+    "products": [
+      "HP Dock",
+      "Monitor",
+      "Druckerpapier"
+    ],
+    "certifications": [],
+    "contactPerson": "",
+    "phone": "",
+    "email": "",
+    "website": "www.bueromarkt-ag.de",
+    "employees": "",
+    "annualRevenue": "",
+    "established": 0,
+    "capabilities": [
+      "HP Dock",
+      "Monitor",
+      "Druckerpapier"
+    ],
+    "matchScore": 85
+  },
+  {
+    "id": "sup-78d4334b",
+    "name": "Enthus GmbH",
+    "category": "hardware",
+    "country": "Germany",
+    "city": "",
+    "description": "HP授权经销商，专注企业级IT设备",
+    "products": [
+      "HP EliteBook",
+      "HP ZBook",
+      "HP Dock"
+    ],
+    "certifications": [],
+    "contactPerson": "",
+    "phone": "",
+    "email": "",
+    "website": "enthus.de",
+    "employees": "",
+    "annualRevenue": "",
+    "established": 0,
+    "capabilities": [
+      "HP EliteBook",
+      "HP ZBook",
+      "HP Dock"
+    ],
+    "matchScore": 82
+  },
+  {
+    "id": "sup-3bce17b1",
+    "name": "UVEX Safety Group",
+    "category": "safetyShoes",
+    "country": "Germany",
+    "city": "Fürth",
+    "description": "德国领先的PPE（个人防护装备）制造商，安全鞋S1-S3等级齐全，符合欧盟标准",
+    "products": [
+      "uvex 1 sport S1 Halbschuh",
+      "uvex S3 Halbschuh",
+      "Damen Sicherheitsschuh S1"
+    ],
+    "certifications": [
+      "CE",
+      "EN ISO 20345"
+    ],
+    "contactPerson": "",
+    "phone": "",
+    "email": "",
+    "website": "www.uvex-safety.com",
+    "employees": "3000+",
+    "annualRevenue": "€ 500M+",
+    "established": 0,
+    "capabilities": [
+      "uvex 1 sport S1 Halbschuh",
+      "uvex S3 Halbschuh",
+      "Damen Sicherheitsschuh S1"
+    ],
+    "matchScore": 90
+  },
+  {
+    "id": "sup-37b9a553",
+    "name": "Böttcher AG (Büro)",
+    "category": "office",
+    "country": "Germany",
+    "city": "Jena",
+    "description": "德国办公用品和设备批发商，提供办公纸张、文件夹、耗材等全品类产品",
+    "products": [
+      "Druckerpapier",
+      "Ordner",
+      "Laminierfolien",
+      "Trennstreifen"
+    ],
+    "certifications": [],
+    "contactPerson": "",
+    "phone": "",
+    "email": "",
+    "website": "www.bueromarkt-ag.de",
+    "employees": "",
+    "annualRevenue": "",
+    "established": 0,
+    "capabilities": [
+      "Druckerpapier",
+      "Ordner",
+      "Laminierfolien",
+      "Trennstreifen"
+    ],
+    "matchScore": 88
+  },
+  {
+    "id": "sup-c43b5cc1",
+    "name": "Viking Office Deutschland GmbH",
+    "category": "office",
+    "country": "Germany",
+    "city": "",
+    "description": "欧洲领先的办公用品直销商，线上线下全渠道",
+    "products": [
+      "Druckerpapier",
+      "Ordner",
+      "Laminierfolien"
+    ],
+    "certifications": [],
+    "contactPerson": "",
+    "phone": "",
+    "email": "",
+    "website": "www.viking.de",
+    "employees": "",
+    "annualRevenue": "",
+    "established": 0,
+    "capabilities": [
+      "Druckerpapier",
+      "Ordner",
+      "Laminierfolien"
+    ],
+    "matchScore": 85
+  },
+  {
+    "id": "sup-994a76c7",
+    "name": "büroshop24 GmbH",
+    "category": "office",
+    "country": "Germany",
+    "city": "",
+    "description": "德国在线办公用品零售商",
+    "products": [
+      "Druckerpapier",
+      "Ordneretiketten",
+      "Laminierfolien"
+    ],
+    "certifications": [],
+    "contactPerson": "",
+    "phone": "",
+    "email": "",
+    "website": "www.bueroshop24.de",
+    "employees": "",
+    "annualRevenue": "",
+    "established": 0,
+    "capabilities": [
+      "Druckerpapier",
+      "Ordneretiketten",
+      "Laminierfolien"
+    ],
+    "matchScore": 82
+  },
+  {
+    "id": "sup-21ff3946",
+    "name": "erstehilfeshop.de",
+    "category": "firstAid",
+    "country": "Germany",
+    "city": "",
+    "description": "德国在线急救用品专业零售商，提供符合DIN标准的全套急救设备和耗材",
+    "products": [
+      "Augenspülflasche",
+      "Verbandpäckchen",
+      "Pflasterstrips",
+      "Rettungsdecke",
+      "Fixierbinde",
+      "Kälte-Sofortkompresse",
+      "Erste-Hilfe-Koffer"
+    ],
+    "certifications": [
+      "DIN 13169",
+      "DIN 13157"
+    ],
+    "contactPerson": "",
+    "phone": "",
+    "email": "",
+    "website": "www.erstehilfeshop.de",
+    "employees": "",
+    "annualRevenue": "",
+    "established": 0,
+    "capabilities": [
+      "Augenspülflasche",
+      "Verbandpäckchen",
+      "Pflasterstrips",
+      "Rettungsdecke",
+      "Fixierbinde",
+      "Kälte-Sofortkompresse",
+      "Erste-Hilfe-Koffer"
+    ],
+    "matchScore": 88
+  },
+  {
+    "id": "sup-6ab5ddcb",
+    "name": "Festo AG & Co. KG",
+    "category": "equipment",
+    "country": "Germany",
+    "city": "Esslingen",
+    "description": "全球领先的气动和电气自动化技术供应商，提供气动接头、阀门、消音器等工业部件",
+    "products": [
+      "Drosselrückschlagventil",
+      "Steckanschluss",
+      "Schalldämpfer",
+      "L-Verschraubung",
+      "Steckverbindung"
+    ],
+    "certifications": [
+      "ISO 9001",
+      "ISO 14001"
+    ],
+    "contactPerson": "",
+    "phone": "",
+    "email": "",
+    "website": "www.festo.com",
+    "employees": "20000+",
+    "annualRevenue": "€ 3B+",
+    "established": 0,
+    "capabilities": [
+      "Drosselrückschlagventil",
+      "Steckanschluss",
+      "Schalldämpfer",
+      "L-Verschraubung",
+      "Steckverbindung"
+    ],
+    "matchScore": 95
+  },
+  {
+    "id": "sup-64287936",
+    "name": "Bieler Industriebedarf",
+    "category": "equipment",
+    "country": "Germany",
+    "city": "",
+    "description": "德国工业零部件供应商，提供密封件、管箍、气动接头、高温管接头",
+    "products": [
+      "PTFE-Dichtband",
+      "Dichtring",
+      "Schlauchschelle",
+      "Temperierkupplung",
+      "Absperrhahn",
+      "Steckanschluss"
+    ],
+    "certifications": [],
+    "contactPerson": "",
+    "phone": "",
+    "email": "",
+    "website": "",
+    "employees": "",
+    "annualRevenue": "",
+    "established": 0,
+    "capabilities": [
+      "PTFE-Dichtband",
+      "Dichtring",
+      "Schlauchschelle",
+      "Temperierkupplung",
+      "Absperrhahn",
+      "Steckanschluss"
+    ],
+    "matchScore": 85
+  },
+  {
+    "id": "sup-76e30a89",
+    "name": "Sang-A Pneumatic",
+    "category": "equipment",
+    "country": "South Korea",
+    "city": "",
+    "description": "韩国的气动元件制造商，IQS标准系列接头和阀门",
+    "products": [
+      "Steckanschluss IQS",
+      "Absperrhahn IQS",
+      "Steck-Mehrfachverteiler"
+    ],
+    "certifications": [],
+    "contactPerson": "",
+    "phone": "",
+    "email": "",
+    "website": "",
+    "employees": "",
+    "annualRevenue": "",
+    "established": 0,
+    "capabilities": [
+      "Steckanschluss IQS",
+      "Absperrhahn IQS",
+      "Steck-Mehrfachverteiler"
+    ],
+    "matchScore": 82
+  },
+  {
+    "id": "sup-9bae12b7",
+    "name": "Seton GmbH",
+    "category": "firstAid",
+    "country": "Germany",
+    "city": "",
+    "description": "德国安全设备和标识供应商",
+    "products": [
+      "Erste-Hilfe-Koffer",
+      "Augenspülwandbox",
+      "Pflaster-Spendersysteme"
+    ],
+    "certifications": [],
+    "contactPerson": "",
+    "phone": "",
+    "email": "",
+    "website": "www.seton.de",
+    "employees": "",
+    "annualRevenue": "",
+    "established": 0,
+    "capabilities": [
+      "Erste-Hilfe-Koffer",
+      "Augenspülwandbox",
+      "Pflaster-Spendersysteme"
+    ],
+    "matchScore": 80
+  },
+  {
+    "id": "sup-7e3320b9",
+    "name": "Würth GmbH",
+    "category": "firstAid",
+    "country": "Germany",
+    "city": "Künzelsau",
+    "description": "全球最大的装配和紧固件贸易商，也提供工业安全和急救用品",
+    "products": [
+      "Erste Hilfe Verbandkasten Nachfüll-Set"
+    ],
+    "certifications": [],
+    "contactPerson": "",
+    "phone": "",
+    "email": "",
+    "website": "www.wuerth.de",
+    "employees": "87000+",
+    "annualRevenue": "€ 20B+",
+    "established": 0,
+    "capabilities": [
+      "Erste Hilfe Verbandkasten Nachfüll-Set"
+    ],
+    "matchScore": 90
+  }
+]
