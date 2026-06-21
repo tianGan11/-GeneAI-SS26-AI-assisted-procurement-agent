@@ -1,9 +1,19 @@
+"""
+Comparison API — standard-product quote benchmarking.
+
+Optimization over the original:
+  - Added auth protection via Depends(get_current_user) so the endpoint
+    requires a valid Bearer token, matching the openapi.yaml contract.
+"""
+
 from __future__ import annotations
 
-from typing import Optional
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
+
+from api.auth import AuthUser, get_current_user
 
 
 router = APIRouter(prefix="/api/comparison", tags=["comparison"])
@@ -17,8 +27,16 @@ class ComparisonSearchRequest(BaseModel):
 
 
 @router.post("/search")
-async def search(req: ComparisonSearchRequest, request: Request):
-    """POST /api/comparison/search — match openapi.yaml spec"""
+async def search(
+    req: ComparisonSearchRequest,
+    request: Request,
+    current_user: Annotated[AuthUser, Depends(get_current_user)],
+):
+    """
+    POST /api/comparison/search — match openapi.yaml spec.
+
+    Protected: requires Authorization: Bearer <token> header.
+    """
     return await request.app.state.agent.search_quotes(
         req.query,
         min_price=req.minPrice,
