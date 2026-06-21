@@ -18,52 +18,65 @@ function SupplierCard({
   onSelect: () => void
 }) {
   const s = t.sourcing
+  // Defensive joins — real (scraped) data may be missing any of these fields.
+  const location = [supplier.city, supplier.country].filter(Boolean).join(', ')
+  const established = supplier.established ? ` · ${s.cardEstablished} ${supplier.established}` : ''
+  const contact = [supplier.contactPerson, supplier.phone].filter(Boolean).join(' · ')
+  const contactSub = [supplier.email, supplier.website].filter(Boolean).join(' · ')
+  const capabilities = supplier.capabilities ?? []
+  const certifications = supplier.certifications ?? []
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-base font-semibold text-slate-900">{supplier.name}</h3>
-          <p className="mt-0.5 text-sm text-slate-500">
-            {supplier.city}, {supplier.country} · {s.cardEstablished} {supplier.established}
-          </p>
+          {(location || established) && (
+            <p className="mt-0.5 text-sm text-slate-500">
+              {location}
+              {established}
+            </p>
+          )}
         </div>
         <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
-          {supplier.matchScore}% {s.match}
+          {Math.round(supplier.matchScore)}% {s.match}
         </span>
       </div>
 
       <div className="mt-4 grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
-        <Field label={s.cardAddress} value={supplier.address} />
-        <Field
-          label={s.cardContact}
-          value={`${supplier.contactPerson} · ${supplier.phone}`}
-          sub={`${supplier.email} · ${supplier.website}`}
-        />
+        <Field label={s.cardAddress} value={supplier.address || location} />
+        <Field label={s.cardContact} value={contact} sub={contactSub} />
         <Field label={s.cardEmployees} value={supplier.employees} />
         <Field label={s.cardRevenue} value={supplier.annualRevenue} />
       </div>
 
-      <div className="mt-4 border-t border-slate-100 pt-4">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">{s.cardCapabilities}</p>
-        <div className="flex flex-wrap gap-1.5">
-          {supplier.capabilities.map((cap) => (
-            <span key={cap} className="rounded-md bg-blue-50 px-2 py-1 text-xs text-blue-700">
-              {cap}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400">{s.cardCerts}</p>
+      {capabilities.length > 0 && (
+        <div className="mt-4 border-t border-slate-100 pt-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">{s.cardCapabilities}</p>
           <div className="flex flex-wrap gap-1.5">
-            {supplier.certifications.map((cert) => (
-              <span key={cert} className="rounded-md border border-slate-200 px-2 py-0.5 text-xs text-slate-600">
-                {cert}
+            {capabilities.map((cap) => (
+              <span key={cap} className="rounded-md bg-blue-50 px-2 py-1 text-xs text-blue-700">
+                {cap}
               </span>
             ))}
           </div>
+        </div>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          {certifications.length > 0 && (
+            <>
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400">{s.cardCerts}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {certifications.map((cert) => (
+                  <span key={cert} className="rounded-md border border-slate-200 px-2 py-0.5 text-xs text-slate-600">
+                    {cert}
+                  </span>
+                ))}
+              </div>
+            </>
+          )}
         </div>
         <button
           type="button"
@@ -77,11 +90,11 @@ function SupplierCard({
   )
 }
 
-function Field({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function Field({ label, value, sub }: { label: string; value?: string; sub?: string }) {
   return (
     <div className="min-w-0">
       <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{label}</p>
-      <p className="mt-0.5 text-sm text-slate-700">{value}</p>
+      <p className="mt-0.5 text-sm text-slate-700">{value || '—'}</p>
       {sub && <p className="text-xs text-slate-400">{sub}</p>}
     </div>
   )
@@ -102,6 +115,7 @@ export function SourcingModule({
   const [currentStep, setCurrentStep] = useState(3)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [hasRun, setHasRun] = useState(!apiEnabled)
+  const [searchError, setSearchError] = useState(false)
   const [feedbackFor, setFeedbackFor] = useState<string | null>(null)
   // Reopening a past conversation re-links feedback to that same record.
   const [activeConversationId, setActiveConversationId] = useState<string | null>(restore?.id ?? null)
@@ -125,11 +139,13 @@ export function SourcingModule({
 
     let list = results
     if (apiEnabled) {
+      setSearchError(false)
       try {
         const res = await api.sourcing.search(query)
         list = res.results
       } catch {
         list = []
+        setSearchError(true)
       }
       setResults(list)
     } else {
@@ -201,22 +217,27 @@ export function SourcingModule({
               ]}
               rows={results.map((r) => [
                 r.name,
-                r.established,
-                `${r.city}, ${r.country}`,
-                r.address,
-                `${r.contactPerson} · ${r.phone}`,
-                r.email,
-                r.website,
-                r.employees,
-                r.annualRevenue,
-                r.capabilities.join('; '),
-                r.certifications.join('; '),
-                `${r.matchScore}%`,
+                r.established ?? '',
+                [r.city, r.country].filter(Boolean).join(', '),
+                r.address ?? '',
+                [r.contactPerson, r.phone].filter(Boolean).join(' · '),
+                r.email ?? '',
+                r.website ?? '',
+                r.employees ?? '',
+                r.annualRevenue ?? '',
+                (r.capabilities ?? []).join('; '),
+                (r.certifications ?? []).join('; '),
+                `${Math.round(r.matchScore)}%`,
               ])}
             />
           </div>
 
-          {results.length === 0 ? (
+          {searchError ? (
+            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-red-200 bg-red-50 p-12 text-red-500">
+              <SearchIcon className="mb-3 h-7 w-7" />
+              <p className="text-sm">{t.common.searchError}</p>
+            </div>
+          ) : results.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white p-12 text-slate-400">
               <SearchIcon className="mb-3 h-7 w-7" />
               <p className="text-sm">{t.common.empty}</p>

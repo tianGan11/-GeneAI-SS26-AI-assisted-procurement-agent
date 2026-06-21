@@ -54,6 +54,7 @@ export interface Translation {
     save: string
     saved: string
     empty: string
+    searchError: string
   }
 
   sourcing: {
@@ -225,6 +226,7 @@ export const translations: Record<Language, Translation> = {
       save: 'Save',
       saved: 'Saved',
       empty: 'No data yet.',
+      searchError: 'Search failed — could not reach the server. Please try again.',
     },
     sourcing: {
       inputLabel: 'What are you sourcing?',
@@ -408,6 +410,7 @@ export const translations: Record<Language, Translation> = {
       save: '保存',
       saved: '已保存',
       empty: '暂无数据。',
+      searchError: '检索失败——无法连接服务器，请重试。',
     },
     sourcing: {
       inputLabel: '您要寻找什么供应商？',
