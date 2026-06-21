@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Language } from '../types'
 import type { Translation } from '../i18n'
 import { useAuth } from '../context/AuthContext'
+import { apiEnabled } from '../lib/api'
 import { LanguageToggle } from '../components/LanguageToggle'
 import { ShieldIcon, SpinnerIcon } from '../components/icons'
 
@@ -125,23 +126,28 @@ export function LoginPage({
               )}
             </form>
 
-            <div className="my-5 flex items-center gap-3 text-xs text-slate-400">
-              <span className="h-px flex-1 bg-slate-200" />
-              <span>·</span>
-              <span className="h-px flex-1 bg-slate-200" />
-            </div>
+            {/* Mock-only affordances — hidden once a real backend is wired up. */}
+            {!apiEnabled && (
+              <>
+                <div className="my-5 flex items-center gap-3 text-xs text-slate-400">
+                  <span className="h-px flex-1 bg-slate-200" />
+                  <span>·</span>
+                  <span className="h-px flex-1 bg-slate-200" />
+                </div>
 
-            <button
-              type="button"
-              onClick={handleSso}
-              disabled={submitting}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <ShieldIcon className="h-4 w-4 text-blue-600" />
-              {t.login.sso}
-            </button>
+                <button
+                  type="button"
+                  onClick={handleSso}
+                  disabled={submitting}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <ShieldIcon className="h-4 w-4 text-blue-600" />
+                  {t.login.sso}
+                </button>
 
-            <p className="mt-6 text-center text-xs text-slate-400">{t.login.demoHint}</p>
+                <p className="mt-6 text-center text-xs text-slate-400">{t.login.demoHint}</p>
+              </>
+            )}
           </div>
         </div>
       </div>

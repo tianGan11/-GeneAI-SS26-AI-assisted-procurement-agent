@@ -121,6 +121,7 @@ export function ComparisonModule({
   const [items, setItems] = useState<ComparisonItem[]>(apiEnabled ? [] : MOCK_COMPARISON)
   const [currentStep, setCurrentStep] = useState(3)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [searchError, setSearchError] = useState(false)
   const [feedbackFor, setFeedbackFor] = useState<string | null>(null)
   // Reopening a past conversation re-links feedback to that same record.
   const [activeConversationId, setActiveConversationId] = useState<string | null>(restore?.id ?? null)
@@ -155,6 +156,7 @@ export function ComparisonModule({
 
     let list = items
     if (apiEnabled) {
+      setSearchError(false)
       try {
         const res = await api.comparison.search(requirement, {
           minPrice: minPrice ? Number(minPrice) : undefined,
@@ -164,6 +166,7 @@ export function ComparisonModule({
         list = res.results
       } catch {
         list = []
+        setSearchError(true)
       }
       setItems(list)
     } else {
@@ -281,7 +284,13 @@ export function ComparisonModule({
           </div>
         </div>
 
-        <ComparisonTable rows={rows} recommendedId={recommendedId} t={t} onSelect={(name) => setFeedbackFor(name)} />
+        {searchError ? (
+          <div className="flex items-center justify-center rounded-lg border border-dashed border-red-200 bg-red-50 py-12 text-sm text-red-500">
+            {t.common.searchError}
+          </div>
+        ) : (
+          <ComparisonTable rows={rows} recommendedId={recommendedId} t={t} onSelect={(name) => setFeedbackFor(name)} />
+        )}
       </section>
 
       {feedbackFor && (

@@ -40,20 +40,21 @@ export interface Supplier {
   id: string
   name: string
   category: SupplierCategoryKey
-  country: string
-  city: string
-  address: string
-  contactPerson: string
-  phone: string
-  email: string
-  website: string
+  /** Detail fields below are optional: real (scraped) data may not have them. */
+  country?: string
+  city?: string
+  address?: string
+  contactPerson?: string
+  phone?: string
+  email?: string
+  website?: string
   /** Headcount band, e.g. "250–500". */
-  employees: string
+  employees?: string
   /** Annual revenue band, e.g. "€ 80M–120M". */
-  annualRevenue: string
-  established: number
-  capabilities: string[]
-  certifications: string[]
+  annualRevenue?: string
+  established?: number
+  capabilities?: string[]
+  certifications?: string[]
   /** 0–100 relevance to the query. */
   matchScore: number
 }
