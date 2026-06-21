@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" font-family="'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1280" height="720" fill="#ffffff"/>
+
+  <!-- Header -->
+  <text x="40" y="50" font-size="31" font-weight="700" fill="#0f172a">Compliance by Design</text>
+  <text x="40" y="80" font-size="15" fill="#64748b">Legal Risk &#8594; Mitigation &#160;·&#160; Fuyao Procurement Cloud &#160;·&#160; Data Sourcing &amp; Web Scraping</text>
+
+  <!-- Column headers -->
+  <text x="275" y="120" font-size="13" font-weight="700" letter-spacing="1.5" fill="#94a3b8" text-anchor="middle">LEGAL RISK</text>
+  <text x="1005" y="120" font-size="13" font-weight="700" letter-spacing="1.5" fill="#94a3b8" text-anchor="middle">OUR MITIGATION</text>
+
+  <!-- ===== Row 1 ===== -->
+  <line x1="520" y1="176" x2="760" y2="176" stroke="#94a3b8" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <rect x="40" y="134" width="470" height="84" rx="12" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5"/>
+  <text x="62" y="167" font-size="16" font-weight="700" fill="#991b1b">EU Database Right</text>
+  <text x="62" y="191" font-size="12.5" fill="#b91c1c">Systematic bulk extraction (Dir. 96/9/EC, Art. 7)</text>
+  <rect x="770" y="134" width="470" height="84" rx="12" fill="#ecfdf5" stroke="#34d399" stroke-width="1.5"/>
+  <text x="792" y="167" font-size="16" font-weight="700" fill="#065f46">Curated seed data + public registries</text>
+  <text x="792" y="191" font-size="12.5" fill="#047857">No mass-scraping; API-first, scraping only as fallback</text>
+
+  <!-- ===== Row 2 ===== -->
+  <line x1="520" y1="284" x2="760" y2="284" stroke="#94a3b8" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <rect x="40" y="242" width="470" height="84" rx="12" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5"/>
+  <text x="62" y="275" font-size="16" font-weight="700" fill="#991b1b">&#167;202a StGB / Anti-scraping</text>
+  <text x="62" y="299" font-size="12.5" fill="#b91c1c">Bypassing logins, CAPTCHAs, paywalls, IP blocks</text>
+  <rect x="770" y="242" width="470" height="84" rx="12" fill="#ecfdf5" stroke="#34d399" stroke-width="1.5"/>
+  <text x="792" y="275" font-size="16" font-weight="700" fill="#065f46">Public pages only</text>
+  <text x="792" y="299" font-size="12.5" fill="#047857">Never bypass any protection mechanism</text>
+
+  <!-- ===== Row 3 ===== -->
+  <line x1="520" y1="392" x2="760" y2="392" stroke="#94a3b8" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <rect x="40" y="350" width="470" height="84" rx="12" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5"/>
+  <text x="62" y="383" font-size="16" font-weight="700" fill="#991b1b">Terms of Service &amp; robots.txt</text>
+  <text x="62" y="407" font-size="12.5" fill="#b91c1c">Contractual + protocol limits on automated access</text>
+  <rect x="770" y="350" width="470" height="84" rx="12" fill="#ecfdf5" stroke="#34d399" stroke-width="1.5"/>
+  <text x="792" y="383" font-size="16" font-weight="700" fill="#065f46">Honor robots.txt + rate limiting</text>
+  <text x="792" y="407" font-size="12.5" fill="#047857">Identified User-Agent; respect Terms of Service</text>
+
+  <!-- ===== Row 4 ===== -->
+  <line x1="520" y1="500" x2="760" y2="500" stroke="#94a3b8" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <rect x="40" y="458" width="470" height="84" rx="12" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5"/>
+  <text x="62" y="491" font-size="16" font-weight="700" fill="#991b1b">Copyright</text>
+  <text x="62" y="515" font-size="12.5" fill="#b91c1c">Copying original descriptions, images, listings</text>
+  <rect x="770" y="458" width="470" height="84" rx="12" fill="#ecfdf5" stroke="#34d399" stroke-width="1.5"/>
+  <text x="792" y="491" font-size="16" font-weight="700" fill="#065f46">Store facts, summarize prose</text>
+  <text x="792" y="515" font-size="12.5" fill="#047857">Name / address / VAT / contact; no verbatim copy</text>
+
+  <!-- ===== Row 5 ===== -->
+  <line x1="520" y1="608" x2="760" y2="608" stroke="#94a3b8" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <rect x="40" y="566" width="470" height="84" rx="12" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5"/>
+  <text x="62" y="599" font-size="16" font-weight="700" fill="#991b1b">GDPR &#8212; Personal Data</text>
+  <text x="62" y="623" font-size="12.5" fill="#b91c1c">Contact-person data of natural persons (B2B incl.)</text>
+  <rect x="770" y="566" width="470" height="84" rx="12" fill="#fffbeb" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="792" y="599" font-size="16" font-weight="700" fill="#92400e">Minimize + provenance + erasure</text>
+  <text x="792" y="623" font-size="12.5" fill="#b45309">Built-in delete; LIA / ROPA before production</text>
+
+  <!-- Legend -->
+  <rect x="430" y="678" width="16" height="16" rx="4" fill="#ecfdf5" stroke="#34d399" stroke-width="1.5"/>
+  <text x="454" y="691" font-size="12.5" fill="#475569">Implemented in prototype</text>
+  <rect x="650" y="678" width="16" height="16" rx="4" fill="#fffbeb" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="674" y="691" font-size="12.5" fill="#475569">Partial — completed for production</text>
+</svg>
