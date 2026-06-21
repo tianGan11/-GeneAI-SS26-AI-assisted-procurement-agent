@@ -6,6 +6,7 @@ import os
 import uuid
 from collections import Counter
 from typing import Any
+from urllib.parse import urlparse
 
 from agent.parser import ProcurementIntent
 
@@ -40,6 +41,8 @@ class SupplierRetriever:
             return []
 
         web_suppliers = []
+        dynamic_scraper = None
+        deep_scrapes = 0
         for result in results:
             title = result.get("title") or "Web supplier"
             href = result.get("href") or result.get("url") or ""
@@ -64,6 +67,21 @@ class SupplierRetriever:
                 "matchScore": 55,
                 "source": "web",
             }
+            if href and deep_scrapes < 3 and self._is_b2b_domain(href):
+                if dynamic_scraper is None:
+                    try:
+                        from scraper.dynamic_scraper import DynamicScraper
+
+                        dynamic_scraper = DynamicScraper()
+                    except Exception:
+                        dynamic_scraper = False
+                if dynamic_scraper:
+                    deep_scrapes += 1
+                    try:
+                        scraped_supplier = dynamic_scraper.scrape_supplier(href)
+                        supplier = self._merge_web_supplier(supplier, scraped_supplier, intent)
+                    except Exception:
+                        pass
             web_suppliers.append(supplier)
         return web_suppliers
 
@@ -195,6 +213,47 @@ class SupplierRetriever:
         return sorted(merged.values(), key=lambda item: item.get("matchScore", 0), reverse=True)
 
     @staticmethod
+    def _is_b2b_domain(url: str) -> bool:
+        domain = urlparse(url).netloc.lower().removeprefix("www.")
+        b2b_domains = (
+            "wlw.de",
+            "wer-liefert-was.de",
+            "industrie.de",
+            "industrystock.de",
+            "europages.de",
+            "europages.com",
+            "kompass.com",
+            "directindustry.com",
+            "thomasnet.com",
+        )
+        return any(domain == item or domain.endswith(f".{item}") for item in b2b_domains)
+
+    @staticmethod
+    def _merge_web_supplier(base: dict, scraped: dict, intent: ProcurementIntent) -> dict:
+        if not scraped:
+            return base
+        merged = dict(base)
+        for key, value in scraped.items():
+            if key == "id":
+                continue
+            if isinstance(value, list):
+                if value:
+                    merged[key] = value
+            elif value not in (None, ""):
+                merged[key] = value
+        merged["category"] = merged.get("category") or intent.category
+        merged["country"] = merged.get("country") or intent.country
+        if not merged.get("certifications"):
+            merged["certifications"] = intent.certifications
+        if not merged.get("products"):
+            merged["products"] = intent.keywords
+        if not merged.get("capabilities"):
+            merged["capabilities"] = intent.keywords
+        merged["matchScore"] = max(int(base.get("matchScore", 55)), int(scraped.get("matchScore", 55)))
+        merged["source"] = "web+deep-scrape"
+        return merged
+
+    @staticmethod
     def _intent_to_query(intent: ProcurementIntent) -> str:
         parts = [
             intent.category or "",
@@ -207,6 +266,32 @@ class SupplierRetriever:
         if intent.max_delivery_days is not None:
             parts.append(f"delivery within {intent.max_delivery_days} days")
         return " ".join(part for part in parts if part).strip() or "automotive procurement supplier"
+
+    @staticmethod
+    def _is_b2b_domain(href: str) -> bool:
+        """Check if URL is a B2B supplier directory worth deep-scraping."""
+        b2b_domains = {"wlw.de", "industrie.de", "b2bmarktplatz.de", "directindustry.de",
+                       "kompass.com", "europages.com", "wer-liefert-was.de", "directory.de"}
+        try:
+            domain = urlparse(href).netloc.lower().replace("www.", "")
+        except Exception:
+            return False
+        return any(b2b in domain for b2b in b2b_domains)
+
+    @staticmethod
+    def _merge_web_supplier(web_supplier: dict, scraped: dict, intent: ProcurementIntent) -> dict:
+        """Merge DuckDuckGo summary with deep-scraped data. Scraped data wins."""
+        if not scraped or not scraped.get("name"):
+            return web_supplier
+        merged = dict(web_supplier)
+        for field in ("name", "description", "products", "certifications", "capabilities",
+                       "phone", "email", "city", "employees", "annualRevenue", "established"):
+            if scraped.get(field):
+                merged[field] = scraped[field]
+        merged["matchScore"] = max(web_supplier.get("matchScore", 55),
+                                   scraped.get("matchScore", 50))
+        merged["source"] = "deep-web"
+        return merged
 
     @staticmethod
     def _supplier_to_document(supplier: dict) -> str:
