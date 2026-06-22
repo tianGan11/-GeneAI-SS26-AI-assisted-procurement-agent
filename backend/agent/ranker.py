@@ -18,7 +18,9 @@ class RankingResponse(BaseModel):
 
 class LLMRanker:
     def __init__(self, llm):
+        from pathlib import Path
         self.llm = llm
+        self.optimized_prompt_path = Path(__file__).resolve().parents[1] / "data" / "optimized_prompt.txt"
 
     async def rank_suppliers(self, query: str, candidates: list[dict]) -> list[dict]:
         """Score each candidate 0-100 based on query relevance. Return sorted by matchScore with reasons."""
@@ -93,7 +95,16 @@ class LLMRanker:
                 }
                 for item in candidates
             ]
+            system_instruction = ""
+            if self.optimized_prompt_path.exists():
+                try:
+                    with open(self.optimized_prompt_path, "r", encoding="utf-8") as f:
+                        system_instruction = f.read().strip() + "\n\n"
+                except Exception:
+                    pass
+
             prompt = (
+                f"{system_instruction}"
                 f"Rank these procurement {item_type} candidates for the query. "
                 "Return one result per candidate id with matchScore 0-100 and a concise reason. "
                 f"Query: {query}\nCandidates: {payload}"

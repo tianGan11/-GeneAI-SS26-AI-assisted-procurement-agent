@@ -1,0 +1,302 @@
+[
+  {
+    "query": "我要买最便宜的paper，预算越低越好",
+    "expected_supplier": "Viking Office Deutschland GmbH",
+    "expected_score": 90,
+    "reason": "报价单中，Viking Office Deutschland GmbH 提供的单价为 9.21 EUR 最具价格竞争力。"
+  },
+  {
+    "query": "需要具有Küchenrolle能力的清洁用品供应商",
+    "expected_supplier": "DM-drogerie markt",
+    "expected_score": 90,
+    "reason": "供应商DM-drogerie markt在清洁用品领域具备Küchenrolle的专业核心能力。"
+  },
+  {
+    "query": "Looking for a 包装材料 supplier from Germany with ISO 9001 certification",
+    "expected_supplier": "DS Smith Packaging Deutschland Stiftung & Co. KG",
+    "expected_score": 95,
+    "reason": "Supplier DS Smith Packaging Deutschland Stiftung & Co. KG is based in Germany, specializes in packaging, and holds ISO 9001."
+  },
+  {
+    "query": "Looking for a 五金件 supplier from Germany with IATF 16949 certification",
+    "expected_supplier": "Wilhelm Böllhoff GmbH & Co. KG",
+    "expected_score": 95,
+    "reason": "Supplier Wilhelm Böllhoff GmbH & Co. KG is based in Germany, specializes in hardware, and holds IATF 16949."
+  },
+  {
+    "query": "找一家Germany的包装材料供应商，必须有 ISO 9001 认证",
+    "expected_supplier": "DS Smith Packaging Deutschland Stiftung & Co. KG",
+    "expected_score": 95,
+    "reason": "供应商DS Smith Packaging Deutschland Stiftung & Co. KG位于Germany，属于包装材料品类，且拥有ISO 9001认证，完全符合条件。"
+  },
+  {
+    "query": "需要具有Water deflector systems能力的挡水条供应商",
+    "expected_supplier": "Cooper Standard France SAS",
+    "expected_score": 90,
+    "reason": "供应商Cooper Standard France SAS在挡水条领域具备Water deflector systems的专业核心能力。"
+  },
+  {
+    "query": "需要具有Druckerpapier能力的办公用品供应商",
+    "expected_supplier": "Böttcher AG (Büro)",
+    "expected_score": 90,
+    "reason": "供应商Böttcher AG (Büro)在办公用品领域具备Druckerpapier的专业核心能力。"
+  },
+  {
+    "query": "我要买最便宜的气动设备/工业备件，预算越低越好",
+    "expected_supplier": "Festo AG & Co. KG",
+    "expected_score": 90,
+    "reason": "报价单中，Festo AG & Co. KG 提供的单价为 5.0 EUR 最具价格竞争力。"
+  },
+  {
+    "query": "紧急采购气动设备/工业备件，交期越快越好，要求3天内到货",
+    "expected_supplier": "Festo AG & Co. KG",
+    "expected_score": 92,
+    "reason": "该供应商交期仅为 2 天，最能满足紧急到货要求。"
+  },
+  {
+    "query": "需要具有Corrugated packaging能力的包装材料供应商",
+    "expected_supplier": "DS Smith Packaging Deutschland Stiftung & Co. KG",
+    "expected_score": 90,
+    "reason": "供应商DS Smith Packaging Deutschland Stiftung & Co. KG在包装材料领域具备Corrugated packaging的专业核心能力。"
+  },
+  {
+    "query": "找一家France的挡水条供应商，必须有 IATF 16949 认证",
+    "expected_supplier": "Cooper Standard France SAS",
+    "expected_score": 95,
+    "reason": "供应商Cooper Standard France SAS位于France，属于挡水条品类，且拥有IATF 16949认证，完全符合条件。"
+  },
+  {
+    "query": "需要具有Küchenrolle 32 Rollen能力的清洁用品供应商",
+    "expected_supplier": "Amazon DE",
+    "expected_score": 90,
+    "reason": "供应商Amazon DE在清洁用品领域具备Küchenrolle 32 Rollen的专业核心能力。"
+  },
+  {
+    "query": "我要买最便宜的workstation，预算越低越好",
+    "expected_supplier": "Bechtle AG",
+    "expected_score": 90,
+    "reason": "报价单中，Bechtle AG 提供的单价为 1474 EUR 最具价格竞争力。"
+  },
+  {
+    "query": "需要具有Drosselrückschlagventil能力的气动设备/工业备件供应商",
+    "expected_supplier": "Festo AG & Co. KG",
+    "expected_score": 90,
+    "reason": "供应商Festo AG & Co. KG在气动设备/工业备件领域具备Drosselrückschlagventil的专业核心能力。"
+  },
+  {
+    "query": "需要具有Augenspülflasche能力的急救包/急救用品供应商",
+    "expected_supplier": "erstehilfeshop.de",
+    "expected_score": 90,
+    "reason": "供应商erstehilfeshop.de在急救包/急救用品领域具备Augenspülflasche的专业核心能力。"
+  },
+  {
+    "query": "紧急采购玻璃胶，交期越快越好，要求3天内到货",
+    "expected_supplier": "Sika Automotive",
+    "expected_score": 92,
+    "reason": "该供应商交期仅为 2 天，最能满足紧急到货要求。"
+  },
+  {
+    "query": "找一家Germany的玻璃胶供应商，必须有 IATF 16949 认证",
+    "expected_supplier": "Sika Automotive GmbH",
+    "expected_score": 95,
+    "reason": "供应商Sika Automotive GmbH位于Germany，属于玻璃胶品类，且拥有IATF 16949认证，完全符合条件。"
+  },
+  {
+    "query": "Looking for a 安全鞋 supplier from Germany with CE certification",
+    "expected_supplier": "UVEX Safety Group",
+    "expected_score": 95,
+    "reason": "Supplier UVEX Safety Group is based in Germany, specializes in safetyShoes, and holds CE."
+  },
+  {
+    "query": "我要买最便宜的accessory，预算越低越好",
+    "expected_supplier": "Bechtle AG",
+    "expected_score": 90,
+    "reason": "报价单中，Bechtle AG 提供的单价为 18.44 EUR 最具价格竞争力。"
+  },
+  {
+    "query": "Looking for a 玻璃胶 supplier from Germany with IATF 16949 certification",
+    "expected_supplier": "Sika Automotive GmbH",
+    "expected_score": 95,
+    "reason": "Supplier Sika Automotive GmbH is based in Germany, specializes in glassAdhesive, and holds IATF 16949."
+  },
+  {
+    "query": "我要买最便宜的安全鞋，预算越低越好",
+    "expected_supplier": "UVEX Safety Group",
+    "expected_score": 90,
+    "reason": "报价单中，UVEX Safety Group 提供的单价为 51.75 EUR 最具价格竞争力。"
+  },
+  {
+    "query": "Looking for a 挡水条 supplier from France with IATF 16949 certification",
+    "expected_supplier": "Cooper Standard France SAS",
+    "expected_score": 95,
+    "reason": "Supplier Cooper Standard France SAS is based in France, specializes in waterDeflector, and holds IATF 16949."
+  },
+  {
+    "query": "需要具有Erste-Hilfe-Koffer能力的急救包/急救用品供应商",
+    "expected_supplier": "Seton GmbH",
+    "expected_score": 90,
+    "reason": "供应商Seton GmbH在急救包/急救用品领域具备Erste-Hilfe-Koffer的专业核心能力。"
+  },
+  {
+    "query": "需要具有TOP Mini Jumbo Toilettenpapier能力的清洁用品供应商",
+    "expected_supplier": "Layer-Chemie GmbH",
+    "expected_score": 90,
+    "reason": "供应商Layer-Chemie GmbH在清洁用品领域具备TOP Mini Jumbo Toilettenpapier的专业核心能力。"
+  },
+  {
+    "query": "紧急采购workstation，交期越快越好，要求3天内到货",
+    "expected_supplier": "Bechtle AG",
+    "expected_score": 92,
+    "reason": "该供应商交期仅为 5 天，最能满足紧急到货要求。"
+  },
+  {
+    "query": "需要具有uvex 1 sport S1 Halbschuh能力的安全鞋供应商",
+    "expected_supplier": "UVEX Safety Group",
+    "expected_score": 90,
+    "reason": "供应商UVEX Safety Group在安全鞋领域具备uvex 1 sport S1 Halbschuh的专业核心能力。"
+  },
+  {
+    "query": "需要具有Kopierpapier A4能力的办公用品供应商",
+    "expected_supplier": "Seel GmbH",
+    "expected_score": 90,
+    "reason": "供应商Seel GmbH在办公用品领域具备Kopierpapier A4的专业核心能力。"
+  },
+  {
+    "query": "我要买最便宜的清洁用品，预算越低越好",
+    "expected_supplier": "DM-drogerie markt",
+    "expected_score": 90,
+    "reason": "报价单中，DM-drogerie markt 提供的单价为 0.65 EUR 最具价格竞争力。"
+  },
+  {
+    "query": "需要具有HP EliteBook能力的五金件供应商",
+    "expected_supplier": "Bechtle AG",
+    "expected_score": 90,
+    "reason": "供应商Bechtle AG在五金件领域具备HP EliteBook的专业核心能力。"
+  },
+  {
+    "query": "紧急采购paper，交期越快越好，要求3天内到货",
+    "expected_supplier": "Viking Office Deutschland GmbH",
+    "expected_score": 92,
+    "reason": "该供应商交期仅为 2 天，最能满足紧急到货要求。"
+  },
+  {
+    "query": "找一家Germany的安全鞋供应商，必须有 CE 认证",
+    "expected_supplier": "UVEX Safety Group",
+    "expected_score": 95,
+    "reason": "供应商UVEX Safety Group位于Germany，属于安全鞋品类，且拥有CE认证，完全符合条件。"
+  },
+  {
+    "query": "需要具有Steckanschluss IQS能力的气动设备/工业备件供应商",
+    "expected_supplier": "Sang-A Pneumatic",
+    "expected_score": 90,
+    "reason": "供应商Sang-A Pneumatic在气动设备/工业备件领域具备Steckanschluss IQS的专业核心能力。"
+  },
+  {
+    "query": "需要具有HP Dock能力的五金件供应商",
+    "expected_supplier": "Böttcher AG",
+    "expected_score": 90,
+    "reason": "供应商Böttcher AG在五金件领域具备HP Dock的专业核心能力。"
+  },
+  {
+    "query": "紧急采购laptop，交期越快越好，要求3天内到货",
+    "expected_supplier": "Bechtle AG",
+    "expected_score": 92,
+    "reason": "该供应商交期仅为 5 天，最能满足紧急到货要求。"
+  },
+  {
+    "query": "找一家Italy的玻璃原片供应商，必须有 IATF 16949 认证",
+    "expected_supplier": "Şişecam Automotive",
+    "expected_score": 95,
+    "reason": "供应商Şişecam Automotive位于Italy，属于玻璃原片品类，且拥有IATF 16949认证，完全符合条件。"
+  },
+  {
+    "query": "Looking for a 急救包/急救用品 supplier from Germany with DIN 13169 certification",
+    "expected_supplier": "erstehilfeshop.de",
+    "expected_score": 95,
+    "reason": "Supplier erstehilfeshop.de is based in Germany, specializes in firstAid, and holds DIN 13169."
+  },
+  {
+    "query": "我要买最便宜的玻璃胶，预算越低越好",
+    "expected_supplier": "Henkel Direct",
+    "expected_score": 90,
+    "reason": "报价单中，Henkel Direct 提供的单价为 11.4 EUR 最具价格竞争力。"
+  },
+  {
+    "query": "Looking for a 气动设备/工业备件 supplier from Germany with ISO 9001 certification",
+    "expected_supplier": "Festo AG & Co. KG",
+    "expected_score": 95,
+    "reason": "Supplier Festo AG & Co. KG is based in Germany, specializes in equipment, and holds ISO 9001."
+  },
+  {
+    "query": "紧急采购安全鞋，交期越快越好，要求3天内到货",
+    "expected_supplier": "UVEX Safety Group",
+    "expected_score": 92,
+    "reason": "该供应商交期仅为 5 天，最能满足紧急到货要求。"
+  },
+  {
+    "query": "Looking for a 玻璃原片 supplier from Italy with IATF 16949 certification",
+    "expected_supplier": "Şişecam Automotive",
+    "expected_score": 95,
+    "reason": "Supplier Şişecam Automotive is based in Italy, specializes in glassRaw, and holds IATF 16949."
+  },
+  {
+    "query": "我要买最便宜的laptop，预算越低越好",
+    "expected_supplier": "Enthus GmbH",
+    "expected_score": 90,
+    "reason": "报价单中，Enthus GmbH 提供的单价为 799 EUR 最具价格竞争力。"
+  },
+  {
+    "query": "紧急采购办公用品，交期越快越好，要求3天内到货",
+    "expected_supplier": "Viking Office Deutschland GmbH",
+    "expected_score": 92,
+    "reason": "该供应商交期仅为 2 天，最能满足紧急到货要求。"
+  },
+  {
+    "query": "需要具有Polyurethane windscreen adhesives能力的玻璃胶供应商",
+    "expected_supplier": "Henkel AG & Co. KGaA",
+    "expected_score": 90,
+    "reason": "供应商Henkel AG & Co. KGaA在玻璃胶领域具备Polyurethane windscreen adhesives的专业核心能力。"
+  },
+  {
+    "query": "找一家Germany的气动设备/工业备件供应商，必须有 ISO 9001 认证",
+    "expected_supplier": "Festo AG & Co. KG",
+    "expected_score": 95,
+    "reason": "供应商Festo AG & Co. KG位于Germany，属于气动设备/工业备件品类，且拥有ISO 9001认证，完全符合条件。"
+  },
+  {
+    "query": "需要具有Direct glazing adhesives能力的玻璃胶供应商",
+    "expected_supplier": "Sika Automotive GmbH",
+    "expected_score": 90,
+    "reason": "供应商Sika Automotive GmbH在玻璃胶领域具备Direct glazing adhesives的专业核心能力。"
+  },
+  {
+    "query": "找一家Germany的急救包/急救用品供应商，必须有 DIN 13169 认证",
+    "expected_supplier": "erstehilfeshop.de",
+    "expected_score": 95,
+    "reason": "供应商erstehilfeshop.de位于Germany，属于急救包/急救用品品类，且拥有DIN 13169认证，完全符合条件。"
+  },
+  {
+    "query": "紧急采购accessory，交期越快越好，要求3天内到货",
+    "expected_supplier": "Bechtle AG",
+    "expected_score": 92,
+    "reason": "该供应商交期仅为 5 天，最能满足紧急到货要求。"
+  },
+  {
+    "query": "需要具有Erste Hilfe Verbandkasten Nachfüll-Set能力的急救包/急救用品供应商",
+    "expected_supplier": "Würth GmbH",
+    "expected_score": 90,
+    "reason": "供应商Würth GmbH在急救包/急救用品领域具备Erste Hilfe Verbandkasten Nachfüll-Set的专业核心能力。"
+  },
+  {
+    "query": "找一家Germany的密封条供应商，必须有 IATF 16949 认证",
+    "expected_supplier": "CQLT SaarGummi Technologies S.à r.l.",
+    "expected_score": 95,
+    "reason": "供应商CQLT SaarGummi Technologies S.à r.l.位于Germany，属于密封条品类，且拥有IATF 16949认证，完全符合条件。"
+  },
+  {
+    "query": "我要买最便宜的办公用品，预算越低越好",
+    "expected_supplier": "Viking Office Deutschland GmbH",
+    "expected_score": 90,
+    "reason": "报价单中，Viking Office Deutschland GmbH 提供的单价为 1.18 EUR 最具价格竞争力。"
+  }
+]
