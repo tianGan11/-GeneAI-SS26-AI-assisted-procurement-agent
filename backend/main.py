@@ -15,7 +15,9 @@ from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
+from fastapi.security import HTTPBearer
 
 from agent.procurement_agent import ProcurementAgent
 from api.auth import router as auth_router
@@ -43,6 +45,31 @@ async def lifespan(app: FastAPI):
 # ---------------------------------------------------------------------------
 
 app = FastAPI(title="ProcureAI API", version="0.1.0", lifespan=lifespan)
+
+# ---------------------------------------------------------------------------
+# Register OpenAPI security scheme so Swagger UI shows the "Authorize" button
+# for Bearer token auth on every protected endpoint.
+# ---------------------------------------------------------------------------
+
+def custom_openapi() -> dict:
+    if app.openapi_schema:
+        return app.openapi_schema
+    schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        routes=app.routes,
+    )
+    schema.setdefault("components", {}).setdefault("securitySchemes", {})["Bearer"] = {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+    }
+    schema.setdefault("security", []).append({"Bearer": []})
+    app.openapi_schema = schema
+    return schema
+
+
+app.openapi = custom_openapi  # type: ignore[assignment]
 
 
 # ---------------------------------------------------------------------------

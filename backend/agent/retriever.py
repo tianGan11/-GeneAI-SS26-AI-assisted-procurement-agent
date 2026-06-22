@@ -35,7 +35,7 @@ class SupplierRetriever:
         try:
             from duckduckgo_search import DDGS
 
-            with DDGS() as ddgs:
+            with DDGS(timeout=10) as ddgs:
                 results = list(ddgs.text(query, max_results=5))
         except Exception:
             return []
@@ -90,7 +90,13 @@ class SupplierRetriever:
         self._collection_built = False
 
     def _ensure_collection(self) -> None:
-        """Build ChromaDB collection lazily (avoids blocking init on model download)."""
+        """Build ChromaDB collection lazily (avoids blocking init on model download).
+
+        On Render's free tier, downloading sentence-transformers (BAAI/bge-m3, ~2 GB)
+        on every cold start causes 502 timeout / OOM.  Skip embedding-based populating
+        when the collection is empty and fall through to the lexical-scoring fallback
+        in _search_local.
+        """
         if self._collection_built:
             return
         self._collection_built = True
@@ -99,31 +105,17 @@ class SupplierRetriever:
             self.collection = None
             return
 
-        ids = [supplier["id"] for supplier in self.suppliers]
-        documents = [self._supplier_to_document(supplier) for supplier in self.suppliers]
-        metadatas = [
-            {
-                "category": supplier.get("category") or "",
-                "country": supplier.get("country") or "",
-                "name": supplier.get("name") or "",
-            }
-            for supplier in self.suppliers
-        ]
-
+        # If the collection already has documents we can query it directly.
         try:
-            embeddings = self._embed_documents(documents)
-            if embeddings is None:
-                self.collection = None
+            count = self.collection.count()
+            if count > 0:
                 return
-            kwargs: dict[str, Any] = {
-                "ids": ids,
-                "documents": documents,
-                "metadatas": metadatas,
-                "embeddings": embeddings,
-            }
-            self.collection.upsert(**kwargs)
         except Exception:
-            self.collection = None
+            pass
+
+        # No pre-existing documents — avoid downloading the embedding model.
+        # The lexical-scoring fallback in _search_local handles this case.
+        self.collection = None
 
     def _search_local(self, query: str, intent: ProcurementIntent, top_k: int) -> list[dict]:
         chroma_results = self._search_chroma(query, top_k)
@@ -220,27 +212,27 @@ class SupplierRetriever:
             "wer-liefert-was.de",
             "industrie.de",
             "industrystock.de",
+            "directindustry.de",
+            "directindustry.com",
             "europages.de",
             "europages.com",
             "kompass.com",
-            "directindustry.com",
             "thomasnet.com",
+            "b2bmarktplatz.de",
+            "directory.de",
         )
         return any(domain == item or domain.endswith(f".{item}") for item in b2b_domains)
 
     @staticmethod
-    def _merge_web_supplier(base: dict, scraped: dict, intent: ProcurementIntent) -> dict:
-        if not scraped:
-            return base
-        merged = dict(base)
-        for key, value in scraped.items():
-            if key == "id":
-                continue
-            if isinstance(value, list):
-                if value:
-                    merged[key] = value
-            elif value not in (None, ""):
-                merged[key] = value
+    def _merge_web_supplier(web_supplier: dict, scraped: dict, intent: ProcurementIntent) -> dict:
+        """Merge DuckDuckGo summary with deep-scraped data. Scraped data wins."""
+        if not scraped or not scraped.get("name"):
+            return web_supplier
+        merged = dict(web_supplier)
+        for field in ("name", "description", "products", "certifications", "capabilities",
+                       "phone", "email", "city", "employees", "annualRevenue", "established"):
+            if scraped.get(field):
+                merged[field] = scraped[field]
         merged["category"] = merged.get("category") or intent.category
         merged["country"] = merged.get("country") or intent.country
         if not merged.get("certifications"):
@@ -249,8 +241,9 @@ class SupplierRetriever:
             merged["products"] = intent.keywords
         if not merged.get("capabilities"):
             merged["capabilities"] = intent.keywords
-        merged["matchScore"] = max(int(base.get("matchScore", 55)), int(scraped.get("matchScore", 55)))
-        merged["source"] = "web+deep-scrape"
+        merged["matchScore"] = max(web_supplier.get("matchScore", 55),
+                                   scraped.get("matchScore", 50))
+        merged["source"] = "deep-web"
         return merged
 
     @staticmethod
@@ -266,32 +259,6 @@ class SupplierRetriever:
         if intent.max_delivery_days is not None:
             parts.append(f"delivery within {intent.max_delivery_days} days")
         return " ".join(part for part in parts if part).strip() or "automotive procurement supplier"
-
-    @staticmethod
-    def _is_b2b_domain(href: str) -> bool:
-        """Check if URL is a B2B supplier directory worth deep-scraping."""
-        b2b_domains = {"wlw.de", "industrie.de", "b2bmarktplatz.de", "directindustry.de",
-                       "kompass.com", "europages.com", "wer-liefert-was.de", "directory.de"}
-        try:
-            domain = urlparse(href).netloc.lower().replace("www.", "")
-        except Exception:
-            return False
-        return any(b2b in domain for b2b in b2b_domains)
-
-    @staticmethod
-    def _merge_web_supplier(web_supplier: dict, scraped: dict, intent: ProcurementIntent) -> dict:
-        """Merge DuckDuckGo summary with deep-scraped data. Scraped data wins."""
-        if not scraped or not scraped.get("name"):
-            return web_supplier
-        merged = dict(web_supplier)
-        for field in ("name", "description", "products", "certifications", "capabilities",
-                       "phone", "email", "city", "employees", "annualRevenue", "established"):
-            if scraped.get(field):
-                merged[field] = scraped[field]
-        merged["matchScore"] = max(web_supplier.get("matchScore", 55),
-                                   scraped.get("matchScore", 50))
-        merged["source"] = "deep-web"
-        return merged
 
     @staticmethod
     def _supplier_to_document(supplier: dict) -> str:
