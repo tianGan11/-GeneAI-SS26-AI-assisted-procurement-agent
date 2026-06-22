@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
 
@@ -40,26 +41,34 @@ MOCK_USERS: dict[str, dict[str, object]] = {
 }
 MOCK_TOKENS: dict[str, str] = {}
 
+# ---------------------------------------------------------------------------
+# FastAPI standard security scheme — fixes Swagger UI "Authorize" button
+# Previously used Header(alias="Authorization") which OpenAPI treated as a
+# plain header param, so the generated spec had no securitySchemes and
+# Swagger never sent the token. HTTPBearer registers a proper bearer
+# security scheme that the Authorize button binds to automatically.
+# ---------------------------------------------------------------------------
 
-def _extract_bearer_token(authorization: str | None) -> str:
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"code": "UNAUTHORIZED", "message": "Missing bearer token"},
-        )
-    return authorization.removeprefix("Bearer ").strip()
+security_scheme = HTTPBearer(auto_error=False)
 
 
 def get_current_user(
-    authorization: Annotated[str | None, Header(alias="Authorization")] = None,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security_scheme)] = None,
 ) -> AuthUser:
-    token = _extract_bearer_token(authorization)
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "UNAUTHORIZED", "message": "Missing bearer token"},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    token = credentials.credentials
     email = MOCK_TOKENS.get(token)
     record = MOCK_USERS.get(email or "")
     if record is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"code": "UNAUTHORIZED", "message": "Invalid or expired token"},
+            headers={"WWW-Authenticate": "Bearer"},
         )
     return record["user"]  # type: ignore[return-value]
 
@@ -86,8 +95,8 @@ async def me(current_user: Annotated[AuthUser, Depends(get_current_user)]) -> Au
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 async def logout(
     response: Response,
-    authorization: Annotated[str | None, Header(alias="Authorization")] = None,
+    current_user: Annotated[AuthUser, Depends(get_current_user)],
 ) -> None:
-    token = _extract_bearer_token(authorization)
-    MOCK_TOKENS.pop(token, None)
+    # get_current_user already validated the token and returns the user
+    # — just signal success (the frontend drops the token client-side).
     response.status_code = status.HTTP_204_NO_CONTENT
