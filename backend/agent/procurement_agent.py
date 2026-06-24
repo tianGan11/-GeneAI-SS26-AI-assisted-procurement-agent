@@ -8,7 +8,8 @@ from typing import Optional
 from agent.parser import IntentParser
 from agent.ranker import LLMRanker
 from agent.retriever import SupplierRetriever
-
+from database import query_suppliers_sync
+from database import query_products_sync
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 
@@ -16,8 +17,10 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 class ProcurementAgent:
     def __init__(self):
         self.llm = self._create_llm()
-        self.suppliers = self._load_json(BASE_DIR / "data" / "suppliers.json")
-        self.quotes = self._load_json(BASE_DIR / "data" / "quotes.json")
+        #self.suppliers = self._load_json(BASE_DIR / "data" / "suppliers.json")
+        self.suppliers = query_suppliers_sync()
+        #self.quotes = self._load_json(BASE_DIR / "data" / "quotes.json")
+        self.quotes = query_products_sync()
         self.parser = IntentParser(self.llm)
         chroma_collection = self._create_chroma_collection()
         self.retriever = SupplierRetriever(chroma_collection, self.suppliers)
