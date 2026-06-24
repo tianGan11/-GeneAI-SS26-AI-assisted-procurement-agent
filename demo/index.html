@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Fuyao Procurement — Live Backend Demo</title>
+<style>
+  :root { --blue:#2563eb; --blue-d:#1d4ed8; --slate:#0f172a; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --green:#10b981; --red:#ef4444; --amber:#f59e0b; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif; background:var(--bg); color:var(--slate); }
+  header { background:#fff; border-bottom:1px solid var(--line); padding:14px 22px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  header h1 { font-size:17px; margin:0; font-weight:700; }
+  .tag { font-size:11px; font-weight:700; background:#fef3c7; color:#92400e; padding:2px 8px; border-radius:999px; letter-spacing:.5px; }
+  .wrap { max-width:1100px; margin:0 auto; padding:22px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:20px; margin-bottom:18px; box-shadow:0 1px 2px rgba(0,0,0,.03); }
+  .card h2 { font-size:15px; margin:0 0 14px; }
+  label { font-size:12px; color:var(--muted); display:block; margin-bottom:5px; font-weight:600; }
+  input, textarea, select { width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:9px; font-size:14px; font-family:inherit; }
+  textarea { resize:vertical; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; }
+  .row > div { flex:1; min-width:160px; }
+  button { background:var(--blue); color:#fff; border:0; padding:9px 18px; border-radius:9px; font-size:14px; font-weight:600; cursor:pointer; }
+  button:hover { background:var(--blue-d); }
+  button.ghost { background:#fff; color:var(--blue); border:1px solid var(--line); }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .dot { width:9px; height:9px; border-radius:50%; display:inline-block; background:#cbd5e1; }
+  .dot.ok { background:var(--green); } .dot.err { background:var(--red); } .dot.wait { background:var(--amber); }
+  .status { font-size:13px; color:var(--muted); margin-top:8px; min-height:18px; }
+  .status.err { color:var(--red); } .status.ok { color:var(--green); }
+  .sup { border:1px solid var(--line); border-radius:11px; padding:14px; margin-top:12px; }
+  .sup h3 { margin:0 0 4px; font-size:15px; }
+  .sup .meta { font-size:13px; color:var(--muted); }
+  .chips { margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; }
+  .chip { font-size:11px; background:#eff6ff; color:#1d4ed8; padding:3px 8px; border-radius:6px; }
+  .score { float:right; font-size:12px; font-weight:700; background:#ecfdf5; color:#065f46; padding:3px 9px; border-radius:7px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; margin-top:10px; }
+  th,td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); }
+  details { margin-top:8px; } summary { cursor:pointer; font-size:12px; color:var(--muted); }
+  pre { background:#0f172a; color:#e2e8f0; padding:12px; border-radius:8px; overflow:auto; font-size:11.5px; max-height:240px; }
+  .hidden { display:none; }
+  .hint { font-size:12px; color:var(--muted); margin-top:6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Fuyao Procurement</h1>
+  <span class="tag">LIVE BACKEND · TEST</span>
+  <div style="flex:1"></div>
+  <span class="dot" id="connDot"></span>
+  <span style="font-size:13px;color:var(--muted)" id="connText">not connected</span>
+</header>
+
+<div class="wrap">
+
+  <!-- Backend config -->
+  <div class="card">
+    <h2>1 · Backend</h2>
+    <label>Backend base URL</label>
+    <div class="row">
+      <div style="flex:3"><input id="baseUrl" value="https://procureai-backend.onrender.com" /></div>
+      <div style="flex:0"><button class="ghost" onclick="testHealth()">Test connection</button></div>
+    </div>
+    <div class="status" id="healthStatus"></div>
+    <div class="hint">Render free tier sleeps after 15 min — the first request may take 30–60s to wake up.</div>
+  </div>
+
+  <!-- Login -->
+  <div class="card">
+    <h2>2 · Sign in</h2>
+    <div class="row">
+      <div><label>Email</label><input id="email" value="user@fuyao.com" /></div>
+      <div><label>Password</label><input id="password" type="password" value="password123" /></div>
+      <div style="flex:0;display:flex;align-items:flex-end"><button onclick="login()">Sign in</button></div>
+    </div>
+    <div class="status" id="loginStatus"></div>
+  </div>
+
+  <!-- Sourcing -->
+  <div class="card hidden" id="appPanel">
+    <h2>3 · Supplier Sourcing</h2>
+    <label>What are you sourcing?</label>
+    <textarea id="srcQuery" rows="2">water deflector strips and glass adhesive in Germany</textarea>
+    <div style="margin-top:10px"><button onclick="searchSourcing()" id="srcBtn">Search suppliers</button></div>
+    <div class="status" id="srcStatus"></div>
+    <div id="srcResults"></div>
+  </div>
+
+  <!-- Comparison -->
+  <div class="card hidden" id="cmpPanel">
+    <h2>4 · Quote Comparison</h2>
+    <label>Procurement requirement</label>
+    <textarea id="cmpQuery" rows="2">windscreen adhesive cartridges, 200 units</textarea>
+    <div class="row" style="margin-top:10px">
+      <div><label>Min € (optional)</label><input id="cmpMin" type="number" /></div>
+      <div><label>Max € (optional)</label><input id="cmpMax" type="number" /></div>
+      <div><label>Delivery</label>
+        <select id="cmpDelivery">
+          <option value="unlimited">No limit</option>
+          <option value="within3">Within 3 days</option>
+          <option value="within7">Within 7 days</option>
+        </select>
+      </div>
+      <div style="flex:0;display:flex;align-items:flex-end"><button onclick="searchComparison()" id="cmpBtn">Compare</button></div>
+    </div>
+    <div class="status" id="cmpStatus"></div>
+    <div id="cmpResults"></div>
+  </div>
+
+</div>
+
+<script>
+  let TOKEN = null;
+  const $ = (id) => document.getElementById(id);
+  const base = () => $('baseUrl').value.replace(/\/+$/, '');
+  const setConn = (state, text) => { $('connDot').className = 'dot ' + state; $('connText').textContent = text; };
+  const esc = (s) => String(s ?? '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  // first non-empty value among several possible field names (backend shape may vary)
+  const pick = (o, ...keys) => { for (const k of keys) { if (o && o[k] !== undefined && o[k] !== null && o[k] !== '') return o[k]; } return ''; };
+
+  async function api(path, opts = {}) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (TOKEN) headers['Authorization'] = 'Bearer ' + TOKEN;
+    const res = await fetch(base() + path, { method: opts.method || 'GET', headers, body: opts.body ? JSON.stringify(opts.body) : undefined });
+    const text = await res.text();
+    let data; try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+    if (!res.ok) { const msg = (data && data.error && data.error.message) || ('HTTP ' + res.status); const e = new Error(msg); e.data = data; throw e; }
+    return data;
+  }
+
+  async function testHealth() {
+    setConn('wait', 'connecting…'); $('healthStatus').className = 'status'; $('healthStatus').textContent = 'Pinging /api/health … (cold start can take up to a minute)';
+    try {
+      const d = await api('/api/health');
+      setConn('ok', 'connected'); $('healthStatus').className = 'status ok'; $('healthStatus').textContent = '✓ Backend reachable: ' + JSON.stringify(d);
+    } catch (e) {
+      setConn('err', 'unreachable'); $('healthStatus').className = 'status err'; $('healthStatus').textContent = '✗ ' + e.message + ' — backend may be asleep, down, or the URL is wrong.';
+    }
+  }
+
+  async function login() {
+    $('loginStatus').className = 'status'; $('loginStatus').textContent = 'Signing in…';
+    try {
+      const d = await api('/api/auth/login', { method: 'POST', body: { email: $('email').value, password: $('password').value } });
+      TOKEN = d.token; setConn('ok', 'signed in');
+      $('loginStatus').className = 'status ok'; $('loginStatus').textContent = '✓ Signed in as ' + (d.user ? (d.user.name || d.user.email) : 'user');
+      $('appPanel').classList.remove('hidden'); $('cmpPanel').classList.remove('hidden');
+    } catch (e) {
+      $('loginStatus').className = 'status err'; $('loginStatus').textContent = '✗ ' + e.message;
+    }
+  }
+
+  function rawBlock(obj) { return '<details><summary>raw JSON</summary><pre>' + esc(JSON.stringify(obj, null, 2)) + '</pre></details>'; }
+
+  function renderSupplier(s) {
+    const name = pick(s, 'name', 'company_name', 'external_id', 'id') || 'Supplier';
+    const score = pick(s, 'matchScore', 'score');
+    const loc = [pick(s,'city'), pick(s,'country')].filter(Boolean).join(', ');
+    const contact = [pick(s,'contactPerson','contact_name','contact'), pick(s,'phone','contact_phone')].filter(Boolean).join(' · ');
+    const email = pick(s,'email','contact_email');
+    const caps = pick(s,'capabilities','products') || [];
+    const certs = pick(s,'certifications') || [];
+    let h = '<div class="sup">';
+    if (score !== '') h += '<span class="score">' + Math.round(Number(score)) + (Number(score) <= 5 ? '' : '%') + '</span>';
+    h += '<h3>' + esc(name) + '</h3>';
+    if (loc) h += '<div class="meta">' + esc(loc) + '</div>';
+    if (contact) h += '<div class="meta">' + esc(contact) + (email ? ' · ' + esc(email) : '') + '</div>';
+    const tags = [].concat(Array.isArray(caps)?caps:[], Array.isArray(certs)?certs:[]).slice(0,8);
+    if (tags.length) h += '<div class="chips">' + tags.map(c => '<span class="chip">' + esc(c) + '</span>').join('') + '</div>';
+    h += rawBlock(s) + '</div>';
+    return h;
+  }
+
+  async function searchSourcing() {
+    $('srcBtn').disabled = true; $('srcStatus').className = 'status'; $('srcStatus').textContent = 'Searching…'; $('srcResults').innerHTML = '';
+    try {
+      const d = await api('/api/sourcing/search', { method: 'POST', body: { query: $('srcQuery').value } });
+      const list = (d && d.results) || (Array.isArray(d) ? d : []);
+      $('srcStatus').className = 'status ok'; $('srcStatus').textContent = '✓ ' + list.length + ' supplier(s)';
+      $('srcResults').innerHTML = list.length ? list.map(renderSupplier).join('') : '<div class="hint">No results returned.</div>';
+    } catch (e) {
+      $('srcStatus').className = 'status err'; $('srcStatus').textContent = '✗ ' + e.message;
+    } finally { $('srcBtn').disabled = false; }
+  }
+
+  async function searchComparison() {
+    $('cmpBtn').disabled = true; $('cmpStatus').className = 'status'; $('cmpStatus').textContent = 'Comparing…'; $('cmpResults').innerHTML = '';
+    const body = { query: $('cmpQuery').value };
+    if ($('cmpMin').value) body.minPrice = Number($('cmpMin').value);
+    if ($('cmpMax').value) body.maxPrice = Number($('cmpMax').value);
+    if ($('cmpDelivery').value !== 'unlimited') body.deliveryTime = $('cmpDelivery').value;
+    try {
+      const d = await api('/api/comparison/search', { method: 'POST', body });
+      const list = (d && d.results) || (Array.isArray(d) ? d : []);
+      $('cmpStatus').className = 'status ok'; $('cmpStatus').textContent = '✓ ' + list.length + ' quote(s)';
+      if (!list.length) { $('cmpResults').innerHTML = '<div class="hint">No results returned.</div>'; return; }
+      let h = '<table><thead><tr><th>Vendor</th><th>Product</th><th>Unit price</th><th>Lead time</th><th>Payment</th><th>Rating</th><th>Score</th></tr></thead><tbody>';
+      for (const q of list) {
+        h += '<tr><td>' + esc(pick(q,'vendor','platform')) + '</td>'
+          + '<td>' + esc(pick(q,'product','listing_title')) + '</td>'
+          + '<td>' + esc(pick(q,'unitLabel') || pick(q,'unitPriceEur','price')) + '</td>'
+          + '<td>' + esc(pick(q,'deliveryLabel','deliveryDays')) + '</td>'
+          + '<td>' + esc(pick(q,'paymentLabel','paymentTerm')) + '</td>'
+          + '<td>' + esc(pick(q,'rating')) + '</td>'
+          + '<td>' + esc(pick(q,'score','matchScore')) + '</td></tr>';
+      }
+      h += '</tbody></table>' + rawBlock(list);
+      $('cmpResults').innerHTML = h;
+    } catch (e) {
+      $('cmpStatus').className = 'status err'; $('cmpStatus').textContent = '✗ ' + e.message;
+    } finally { $('cmpBtn').disabled = false; }
+  }
+</script>
+</body>
+</html>
