@@ -52,8 +52,9 @@ CATEGORY_KEYWORDS: dict[str, set[str]] = {
         "垃圾袋", "müllbeutel", "清洁用品",
     },
     "office": {
-        "office", "办公", "纸", "papier", "文件夹", "ordner",
-        "打印", "drucker", "büro", "laminier", "塑封",
+        "office", "office supplies", "stationery", "办公", "纸", "papier", "paper", "a4",
+        "copy paper", "printer paper", "文件夹", "ordner", "folder", "folders",
+        "file folder", "binder", "打印", "drucker", "büro", "bürobedarf", "laminier", "塑封",
         "标签", "etiketten", "print", "copy",
     },
     "safetyShoes": {
@@ -74,9 +75,9 @@ CATEGORY_KEYWORDS: dict[str, set[str]] = {
 }
 
 COUNTRY_ALIASES = {
-    "germany": "Germany", "deutschland": "Germany", "德国": "Germany",
-    "france": "France", "frankreich": "France", "法国": "France",
-    "italy": "Italy", "italien": "Italy", "意大利": "Italy",
+    "germany": "Germany", "german": "Germany", "deutschland": "Germany", "德国": "Germany",
+    "france": "France", "french": "France", "frankreich": "France", "法国": "France",
+    "italy": "Italy", "italian": "Italy", "italien": "Italy", "意大利": "Italy",
     "europe": "Europe", "eu": "Europe", "欧洲": "Europe",
 }
 
@@ -109,8 +110,10 @@ class IntentParser:
 
     def _merge_with_heuristics(self, query: str, intent: ProcurementIntent) -> ProcurementIntent:
         heuristic = self._parse_heuristically(query)
+        valid_categories = set(CATEGORY_KEYWORDS)
+        llm_category = intent.category if intent.category in valid_categories else None
         return ProcurementIntent(
-            category=intent.category or heuristic.category,
+            category=llm_category or heuristic.category,
             country=intent.country or heuristic.country,
             certifications=list(dict.fromkeys([*intent.certifications, *heuristic.certifications])),
             max_price=intent.max_price if intent.max_price is not None else heuristic.max_price,
@@ -143,7 +146,10 @@ class IntentParser:
     @staticmethod
     def _extract_country(normalized: str) -> Optional[str]:
         for alias, country in COUNTRY_ALIASES.items():
-            if alias in normalized:
+            if re.search(r"[\u4e00-\u9fff]", alias):
+                if alias in normalized:
+                    return country
+            elif re.search(rf"(?<![\wäöüß]){re.escape(alias)}(?![\wäöüß])", normalized):
                 return country
         return None
 

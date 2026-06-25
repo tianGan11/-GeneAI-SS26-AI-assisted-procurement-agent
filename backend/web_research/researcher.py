@@ -6,7 +6,9 @@ import re
 import uuid
 from dataclasses import dataclass
 from typing import Any, Protocol
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
+
+from pydantic import BaseModel, Field
 
 from agent.parser import ProcurementIntent
 
@@ -18,12 +20,28 @@ class SearchResult:
     snippet: str = ""
 
 
+@dataclass(frozen=True)
+class PageSnapshot:
+    url: str
+    text: str
+    links: list[str]
+
+
+@dataclass(frozen=True)
+class DeepEvidence:
+    text: str
+    source_urls: list[str]
+    email_candidates: list[str]
+    phone_candidates: list[str]
+
+
 class SearchProvider(Protocol):
     async def search(self, query: str, max_results: int = 8) -> list[SearchResult]: ...
 
 
 class PageFetcher(Protocol):
     async def fetch_text(self, url: str) -> str: ...
+    async def fetch_page(self, url: str) -> PageSnapshot: ...
 
 
 class DuckDuckGoSearchProvider:
@@ -53,12 +71,12 @@ class DuckDuckGoSearchProvider:
 
 
 class StaticPageFetcher:
-    async def fetch_text(self, url: str) -> str:
+    async def fetch_page(self, url: str) -> PageSnapshot:
         try:
             import requests
             from bs4 import BeautifulSoup
 
-            def run() -> str:
+            def run() -> PageSnapshot:
                 response = requests.get(
                     url,
                     timeout=12,
@@ -71,208 +89,567 @@ class StaticPageFetcher:
                     },
                 )
                 if response.status_code >= 400:
-                    return ""
+                    return PageSnapshot(url=url, text="", links=[])
                 soup = BeautifulSoup(response.text, "html.parser")
+                links: list[str] = []
+                for anchor in soup.find_all("a", href=True):
+                    href = str(anchor.get("href") or "").strip()
+                    if not href or href.startswith(("mailto:", "tel:", "javascript:", "#")):
+                        continue
+                    absolute = urljoin(response.url, href)
+                    if absolute.startswith(("http://", "https://")):
+                        links.append(absolute.split("#", 1)[0])
                 for noisy in soup(["script", "style", "noscript", "svg"]):
                     noisy.decompose()
-                return WebResearcher.clean_text(soup.get_text(" "))
+                return PageSnapshot(
+                    url=response.url,
+                    text=WebResearcher.clean_text(soup.get_text(" ")),
+                    links=list(dict.fromkeys(links))[:80],
+                )
 
             return await asyncio.to_thread(run)
         except Exception:
-            return ""
+            return PageSnapshot(url=url, text="", links=[])
 
+    async def fetch_text(self, url: str) -> str:
+        page = await self.fetch_page(url)
+        return page.text
+
+
+# ---------------------------------------------------------------------------
+# Pydantic models for LLM structured output
+# ---------------------------------------------------------------------------
+
+class SupplierCandidate(BaseModel):
+    name: str
+    website: str
+    country: str = ""
+    city: str = ""
+    description: str = ""
+    products: list[str] = Field(default_factory=list)
+    capabilities: list[str] = Field(default_factory=list)
+    certifications: list[str] = Field(default_factory=list)
+    relevance_score: int = Field(ge=0, le=100, default=60)
+    is_supplier: bool = True
+
+
+class RelevanceJudgment(BaseModel):
+    is_supplier_page: bool
+    confidence: int = Field(ge=0, le=100)
+    reason: str = ""
+
+
+# ---------------------------------------------------------------------------
+# WebResearcher — LLM-driven supplier discovery
+# ---------------------------------------------------------------------------
 
 class WebResearcher:
-    """Agent-like web research for procurement supplier discovery.
+    """LLM-driven procurement supplier web research.
 
-    Pipeline:
-    1. Plan multiple category-aware search queries.
-    2. Collect and de-duplicate search results.
-    3. Filter software/login/noise pages.
-    4. Fetch lightweight page text when useful.
-    5. Normalize candidates to the same supplier schema used by the backend.
-    6. Add category fallback suppliers when public search is blocked/noisy.
+    Architecture:
+    1. LLM plans context-aware search queries based on the parsed intent.
+    2. DDG executes each query; raw results are collected and de-duplicated.
+    3. LLM judges which results are actual supplier pages.
+    4. LLM extracts structured supplier profiles from selected pages.
+    5. Rule-based fallbacks cover categories without enough search hits.
     """
 
-    BLOCKED_TERMS = (
-        "office 365", "microsoft 365",
-        "login", "sign in", "signin", "konto anmelden", "software download",
-    )
     BLOCKED_DOMAINS = (
-        "microsoft.com", "office.com", "outlook.com",
-        # Consumer marketplaces / social/product discovery pages are not supplier candidates.
-        "amazon.de", "amazon.com", "ebay.de", "ebay.com", "etsy.com", "aliexpress.com", "temu.com",
+        # Consumer marketplaces
+        "amazon.de", "amazon.com", "ebay.de", "ebay.com", "ebey.de",
+        "etsy.com", "aliexpress.com", "temu.com",
         "alibaba.com", "dhgate.com", "made-in-china.com", "globalsources.com",
-        "pinterest.com", "facebook.com", "linkedin.com", "instagram.com", "youtube.com", "wikipedia.org",
-        "stock.adobe.com", "adobe.com", "bing.com", "foreign.mingluji.com",
-        "fortunebusinessinsights.com", "deutschepost.de",
-        "scribd.com", "fliphtml5.com", "reverso.net", "context.reverso.net",
-        "monoskop.org", "sostrenegrene.com", "efiliale.de", "idealo.de",
-        "yumpu.com", "dokumen.pub", "staples.com",
+        # Social / media
+        "pinterest.com", "facebook.com", "instagram.com", "tiktok.com",
+        "youtube.com", "wikipedia.org", "linkedin.com",
+        # Software / login
+        "microsoft.com", "office.com", "outlook.com",
+        "adobe.com", "stock.adobe.com", "bing.com",
+        # Document / content hosts
+        "scribd.com", "fliphtml5.com", "yumpu.com", "dokumen.pub",
+        "monoskop.org", "reverso.net", "context.reverso.net",
+        # Shopping / comparison
+        "idealo.de", "shopicx.de", "shopicx.com",
+        # Non-supplier
+        "deutschepost.de", "fortunebusinessinsights.com",
+        "foreign.mingluji.com", "sostrenegrene.com", "efiliale.de",
+        "staples.com", "envato.com", "papercart.ph",
+        # Redirect / tracking
+        "google.com", "goo.gl", "bit.ly",
     )
+
     BLOCKED_FILE_EXTENSIONS = (".pdf", ".doc", ".docx", ".ppt", ".pptx")
-    NOISY_MARKERS = (
-        "request unsuccessful", "incapsula incident", "distil_referrer", "use strict",
-        "function(t)", "sessionstorage", "splide.defaults", "captcha", "access denied",
-        "bot detection", "enable javascript", "cloudflare ray id",
-    )
-    B2B_DOMAINS = (
-        "wlw.de", "wer-liefert-was.de", "europages.de", "europages.com", "kompass.com",
-        "industrystock.de", "directindustry.com", "directindustry.de", "thomasnet.com",
-    )
-    B2B_MARKETPLACE_ROOT_DOMAINS = ("europages.de", "europages.com", "kompass.com", "wlw.de", "wer-liefert-was.de")
 
-    CATEGORY_TERMS: dict[str, list[str]] = {
-        "office": [
-            "Bürobedarf Großhandel Lieferant Deutschland A4 Papier Ordner",
-            "office supplies wholesaler Germany paper folders printer supplies",
-            "Büromaterial Lieferant Deutschland Kopierpapier Druckerzubehör",
-        ],
-        "cleaning": [
-            "Reinigungsmittel Großhandel Lieferant Deutschland",
-            "cleaning supplies wholesaler Germany B2B",
-        ],
-        "firstAid": [
-            "Erste Hilfe Bedarf Lieferant Deutschland Verbandkasten Pflaster",
-            "first aid supplies supplier Germany B2B",
-        ],
-        "safetyShoes": [
-            "Sicherheitsschuhe Lieferant Deutschland S1 S3",
-            "safety shoes supplier Germany S1 S3",
-        ],
-        "glassAdhesive": [
-            "Scheibenkleber Glas Klebstoff Lieferant Deutschland IATF",
-            "automotive glass adhesive supplier Germany IATF",
-        ],
-        "rubberSeal": [
-            "Dichtungsprofil EPDM Lieferant Deutschland",
-            "rubber seal supplier Germany EPDM automotive",
-        ],
-        "hardware": [
-            "Industriebedarf Befestigungstechnik Lieferant Deutschland",
-            "hardware fastener supplier Germany B2B",
-        ],
-        "equipment": [
-            "Industriebedarf Ausrüstung Lieferant Deutschland",
-            "industrial equipment supplier Germany B2B",
-        ],
-        "packaging": [
-            "Verpackung Karton Lieferant Deutschland Großhandel",
-            "packaging supplier Germany B2B carton boxes",
-        ],
-    }
-
-    OFFICE_POSITIVE_TERMS = (
-        "bürobedarf", "buero", "office supplies", "paper", "papier", "ordner",
-        "druckerpapier", "kopierpapier", "büromaterial", "buromaterial", "schreibwaren",
-        "großhandel", "grosshandel", "supplier", "lieferant", "viking", "otto office",
-        "böttcher", "boettcher", "büroshop24", "bueroshop24", "kaiserkraft", "schaefer-shop",
-        "rajapack",
+    CONTENT_PAGE_KEYWORDS = (
+        "how to", "guide", "tips", "blog", "news", "article",
+        "comparison", "compare", "review", "best of", "top 10",
+        "what is", "why you", "should you",
     )
 
-    def __init__(self, search_provider: SearchProvider | None = None, page_fetcher: PageFetcher | None = None, llm=None):
+    # High-signal B2B directories — search results from these domains
+    # are automatically ranked higher.
+    B2B_DIRECTORY_DOMAINS = (
+        "wlw.de", "wer-liefert-was.de",
+        "europages.de", "europages.com",
+        "kompass.com",
+        "industrystock.de", "industrystock.com",
+        "directindustry.com", "directindustry.de",
+        "thomasnet.com",
+        "lieferanten.de",
+    )
+
+    # wlw/europages search/browse page URL patterns — these show lists of
+    # suppliers, not individual supplier profiles, so they should be excluded.
+    DIRECTORY_SEARCH_PATH_PATTERNS = (
+        "/de/suche/", "/en/search/", "/fr/recherche/",
+        "/unternehmen/", "/companies/",
+    )
+
+    OFFICE_FALLBACK_SUPPLIERS: list[dict] = [
+        {
+            "name": "Viking Office Deutschland",
+            "website": "https://www.viking.de/",
+            "country": "Germany",
+            "description": "German office-supplies supplier for paper, folders, printer supplies and general Bürobedarf.",
+            "products": ["A4 Papier", "Ordner", "Druckerzubehör", "Bürobedarf"],
+            "capabilities": ["Office supplies", "Bürobedarf", "B2B ordering"],
+            "matchScore": 72,
+        },
+        {
+            "name": "OTTO Office",
+            "website": "https://www.otto-office.com/de/",
+            "country": "Germany",
+            "description": "Office supplies, office technology and office furniture supplier in Germany.",
+            "products": ["Kopierpapier", "Laminierfolien", "Ordner", "Büromaterial"],
+            "capabilities": ["Office supplies", "Bürotechnik", "Büromöbel"],
+            "matchScore": 71,
+        },
+        {
+            "name": "Böttcher AG Bürobedarf",
+            "website": "https://www.bueromarkt-ag.de/",
+            "country": "Germany",
+            "description": "German Bürobedarf and office-material online supplier.",
+            "products": ["Papier", "Ordner", "Etiketten", "Büroartikel"],
+            "capabilities": ["Bürobedarf", "Online procurement"],
+            "matchScore": 69,
+        },
+        {
+            "name": "büroshop24",
+            "website": "https://www.bueroshop24.de/",
+            "country": "Germany",
+            "description": "German online office-supplies shop for paper, stationery and office equipment.",
+            "products": ["Papier", "Schreibwaren", "Bürogeräte"],
+            "capabilities": ["Bürobedarf", "Office equipment"],
+            "matchScore": 68,
+        },
+    ]
+
+    def __init__(
+        self,
+        search_provider: SearchProvider | None = None,
+        page_fetcher: PageFetcher | None = None,
+        llm: Any = None,
+    ):
         self.search_provider = search_provider or DuckDuckGoSearchProvider()
         self.page_fetcher = page_fetcher or StaticPageFetcher()
         self.llm = llm
 
-    async def research(self, intent: ProcurementIntent, max_suppliers: int = 8) -> list[dict]:
-        collected: dict[str, SearchResult] = {}
-        for query in self.plan_queries(intent):
-            for result in await self.search_provider.search(query, max_results=8):
-                key = self.normalized_url_key(result.url) or result.title.lower()
-                if key and key not in collected:
-                    collected[key] = result
-            if len(collected) >= max_suppliers * 2:
-                break
+    # ------------------------------------------------------------------
+    # Public entry point
+    # ------------------------------------------------------------------
 
+    async def research(self, intent: ProcurementIntent, max_suppliers: int = 8,
+                       progress=None) -> list[dict]:
+        """LLM-driven supplier discovery pipeline.
+
+        When *progress* is provided, it is called as progress(phase, message, pct)
+        whenever a meaningful step completes, so the frontend can display the
+        agent's real-time thought process.
+        """
+        if progress:
+            progress("think", "正在通过 LLM 规划 B2B 供应商搜索策略...", 46)
+
+        # 1. LLM plans search queries
+        queries = await self._llm_plan_queries(intent)
+        if not queries:
+            queries = self._rule_plan_queries(intent)
+
+        if progress:
+            progress("think", f"LLM 生成了 {len(queries)} 条针对性的 B2B 搜索查询，准备依次执行...", 48)
+
+        # 2. Execute queries, collect results
+        collected: dict[str, SearchResult] = {}
+        executed_queries: set[str] = set()
+
+        async def execute_query_batch(batch: list[str], start_index: int = 0, label: str = "搜索") -> None:
+            nonlocal collected
+            total = min(len(batch), 6)
+            for idx, query in enumerate(batch[:6]):
+                if query in executed_queries:
+                    continue
+                executed_queries.add(query)
+                results = await self._search_with_retry(query, max_results=10)
+                new_count = 0
+                for result in results:
+                    if not self._url_ok(result.url):
+                        continue
+                    key = self._url_key(result.url) or result.title.lower()
+                    if key and key not in collected:
+                        collected[key] = result
+                        new_count += 1
+                if progress:
+                    progress("think",
+                             f"{label} [{idx+1}/{total}]: {query[:50]}... → 新增 {new_count} 条，累计 {len(collected)} 条",
+                             48 + int((start_index + idx) * 3))
+                if len(collected) >= max_suppliers * 3:
+                    break
+
+        await execute_query_batch(queries, label="搜索")
+
+        if len(collected) < max_suppliers * 2:
+            fallback_queries = [q for q in self._rule_plan_queries(intent) if q not in executed_queries]
+            if progress and fallback_queries:
+                progress("think", f"LLM 查询结果偏少（{len(collected)} 条），追加规则 B2B 查询兜底...", 58)
+            await execute_query_batch(fallback_queries, start_index=len(queries), label="兜底搜索")
+
+        results_list = list(collected.values())
+        if progress:
+            progress("think", f"共收集到 {len(results_list)} 条候选搜索结果，正在用 LLM 判断哪些是真正的供应商页面...", 60)
+
+        # 3. LLM judges which results are real supplier pages
+        relevant = await self._llm_filter_relevant(results_list, intent)
+        min_relevant = min(len(results_list), max_suppliers * 2)
+        if len(relevant) < min_relevant:
+            rule_relevant = self._rule_filter_relevant(results_list, intent)
+            relevant = self._merge_search_results(relevant, rule_relevant)[:min_relevant]
+            if progress:
+                progress("think", f"LLM 筛选结果偏少，已用规则信号补足到 {len(relevant)} 条候选，避免同一问题结果数量大幅波动。", 64)
+
+        if progress:
+            progress("think", f"LLM 筛选完成：从 {len(results_list)} 条中识别出 {len(relevant)} 条相关供应商", 65)
+
+        # 4. Extract supplier profiles from relevant results
         suppliers: list[dict] = []
-        for result in collected.values():
-            if not self.is_relevant_result(result, intent):
-                continue
-            supplier = await self.result_to_supplier(result, intent)
-            if supplier and not self.is_noisy_or_blocked(supplier.get("description", "")):
-                suppliers.append(supplier)
-            elif supplier:
-                supplier["description"] = result.snippet
+        for idx, result in enumerate(relevant[:max_suppliers * 2]):
+            if progress and result.title:
+                progress("think", f"正在提取供应商信息 [{idx+1}/{min(len(relevant), max_suppliers*2)}]: {result.title[:50]}", 
+                         65 + int(idx * 2))
+            supplier = await self._result_to_supplier(result, intent, progress=progress, index=idx+1,
+                                                     total=min(len(relevant), max_suppliers*2))
+            if supplier:
                 suppliers.append(supplier)
             if len(suppliers) >= max_suppliers:
                 break
 
-        suppliers = self.merge_supplier_lists(suppliers, self.fallback_suppliers(intent))
+        # 5. Merge with category fallback suppliers
+        suppliers = self.merge_supplier_lists(suppliers, self._fallback_suppliers(intent))
         return suppliers[:max_suppliers]
 
-    def plan_queries(self, intent: ProcurementIntent) -> list[str]:
+    async def _search_with_retry(self, query: str, max_results: int = 10, attempts: int = 2) -> list[SearchResult]:
+        last: list[SearchResult] = []
+        for attempt in range(attempts):
+            try:
+                results = await self.search_provider.search(query, max_results=max_results)
+            except Exception:
+                results = []
+            if results:
+                return results
+            last = results
+            if attempt + 1 < attempts:
+                await asyncio.sleep(0.25)
+        return last
+
+    # ------------------------------------------------------------------
+    # LLM query planning
+    # ------------------------------------------------------------------
+
+    async def _llm_plan_queries(self, intent: ProcurementIntent) -> list[str]:
+        """Ask the LLM to generate targeted B2B search queries."""
+        if not self.llm:
+            return []
+
         country = intent.country or "Germany"
-        keywords = " ".join(intent.keywords[:6])
-        base_terms = self.CATEGORY_TERMS.get(intent.category or "", [
-            "procurement supplier B2B wholesaler Germany",
-            "industrial supplier Germany B2B procurement",
-        ])
-        exclusions = "-microsoft -office365 -outlook -login -signin"
-        queries: list[str] = []
-        for term in base_terms:
-            queries.append(self.clean_text(f"{keywords} {country} {term} {exclusions}"))
-        if intent.category == "office":
-            queries.extend([
-                self.clean_text(f"{keywords} site:wlw.de Bürobedarf Lieferant Deutschland {exclusions}"),
-                self.clean_text(f"{keywords} site:europages.de Bürobedarf Deutschland {exclusions}"),
-                self.clean_text(f"{keywords} site:kompass.com office supplies Germany {exclusions}"),
-            ])
-        else:
-            category = intent.category or "supplier"
-            queries.extend([
-                self.clean_text(f"{keywords} site:wlw.de {category} Lieferant Deutschland"),
-                self.clean_text(f"{keywords} site:europages.com {category} supplier Germany"),
-            ])
-        return list(dict.fromkeys(q for q in queries if q))[:8]
+        category = intent.category or "general procurement"
+        keywords = ", ".join(intent.keywords[:8])
 
-    def is_relevant_result(self, result: SearchResult, intent: ProcurementIntent) -> bool:
-        text = f"{result.title} {result.url} {result.snippet}".lower()
-        if not result.url.startswith(("http://", "https://")):
-            return False
-        parsed_url = urlparse(result.url)
-        if parsed_url.path.lower().endswith(self.BLOCKED_FILE_EXTENSIONS):
-            return False
-        domain = parsed_url.netloc.lower().removeprefix("www.")
-        if not result.url or any(domain == item or domain.endswith(f".{item}") for item in self.BLOCKED_DOMAINS):
-            return False
-        if any(term in text for term in self.BLOCKED_TERMS):
-            return False
-        if self.is_generic_marketplace_homepage(result.url, result.title):
-            return False
-        if self.is_noisy_or_blocked(text):
-            return False
-        if intent.category == "office":
-            return any(term in text for term in self.OFFICE_POSITIVE_TERMS)
-        if any(domain == item or domain.endswith(f".{item}") for item in self.B2B_DOMAINS):
-            return True
-        category_terms = " ".join(self.CATEGORY_TERMS.get(intent.category or "", [])).lower()
-        return any(token in text for token in self.tokenize(category_terms)[:12])
-
-    async def result_to_supplier(self, result: SearchResult, intent: ProcurementIntent) -> dict:
-        page_text = ""
-        if self.should_fetch_page(result.url):
-            page_text = await self.page_fetcher.fetch_text(result.url)
-        evidence_text = self.clean_text(" ".join(part for part in [result.title, result.snippet, page_text] if part))
-        llm_supplier = await self.llm_extract_supplier(evidence_text, result.url, intent)
-        if llm_supplier:
-            return self.normalize_supplier(llm_supplier, result, intent, source="web-research-llm")
-        return self.normalize_supplier({
-            "name": self.clean_title(result.title),
-            "description": self.best_description(result.snippet, page_text),
-            "products": self.extract_products(evidence_text, intent),
-            "capabilities": self.extract_capabilities(evidence_text, intent),
-        }, result, intent, source="web-research")
-
-    async def llm_extract_supplier(self, text: str, url: str, intent: ProcurementIntent) -> dict | None:
-        if not self.llm or not text or self.is_noisy_or_blocked(text):
-            return None
         prompt = (
-            "Extract a B2B procurement supplier profile from the evidence text. "
-            "Return only JSON with keys: name, description, products, capabilities, country, city, certifications. "
-            "If this is not a supplier page, return {}.\n"
-            f"Category: {intent.category}\nCountry: {intent.country}\nURL: {url}\nEvidence:\n{text[:3500]}"
+            "You are a procurement agent. A user needs to find B2B suppliers.\n\n"
+            f"Category: {category}\n"
+            f"Target country: {country}\n"
+            f"Keywords from user query: {keywords}\n"
+            f"Budget: €{intent.max_price if intent.max_price else 'not specified'}\n"
+            f"Delivery: {intent.max_delivery_days or 'not specified'} days\n\n"
+            "Generate 5-6 DuckDuckGo search queries to find REAL B2B suppliers on the web. "
+            "Each query should be a complete search string, one per line.\n\n"
+            "Rules:\n"
+            "- Target B2B directories: site:wlw.de, site:europages.de, site:kompass.com, site:lieferanten.de\n"
+            "- Use the target country's language (German for Germany, French for France, etc.)\n"
+            "- Include B2B-specific terms: Lieferant, Großhandel, Hersteller, wholesaler, B2B\n"
+            "- Exclude consumer/retail noise: -Amazon -eBay -Pinterest\n"
+            "- Focus on the specific products/services the user needs\n\n"
+            "Return ONLY the queries, one per line. No numbering, no explanations."
         )
+
+        try:
+            if hasattr(self.llm, "ainvoke"):
+                response = await self.llm.ainvoke(prompt)
+            elif hasattr(self.llm, "invoke"):
+                response = await asyncio.to_thread(self.llm.invoke, prompt)
+            else:
+                return []
+
+            content = str(getattr(response, "content", response))
+            queries = []
+            for line in content.strip().split("\n"):
+                q = line.strip().lstrip("0123456789.-) ").strip()
+                if q and len(q) > 10:
+                    queries.append(q)
+            return queries[:6]
+        except Exception:
+            return []
+
+    # ------------------------------------------------------------------
+    # LLM relevance filtering
+    # ------------------------------------------------------------------
+
+    async def _llm_filter_relevant(
+        self, results: list[SearchResult], intent: ProcurementIntent
+    ) -> list[SearchResult]:
+        """Ask the LLM to identify which search results are real supplier pages."""
+        if not self.llm or not results:
+            return self._rule_filter_relevant(results, intent)
+
+        # Build a compact summary of results for the LLM
+        lines = []
+        for i, r in enumerate(results):
+            lines.append(f"[{i}] {r.title}\n    URL: {r.url}\n    Snippet: {r.snippet[:200]}")
+        results_text = "\n\n".join(lines)
+
+        prompt = (
+            "You are evaluating web search results for a procurement agent. "
+            "The agent MUST find B2B suppliers that match the SPECIFIC procurement category below.\n\n"
+            f"Procurement category: {intent.category}\n"
+            f"Target country: {intent.country or 'Germany'}\n"
+            f"User keywords: {', '.join(intent.keywords[:8])}\n\n"
+            "For each search result, decide if it is a VALID supplier for THIS category.\n\n"
+            "A valid supplier MUST:\n"
+            "- Be a manufacturer, wholesaler, or industrial distributor\n"
+            "- Offer products/services that MATCH the procurement category\n"
+            "- Have a company profile page (not a search results listing)\n\n"
+            "REJECT these:\n"
+            "- Companies in unrelated categories (e.g., chemicals, plastics, IT for office supplies)\n"
+            "- Generic marketplace homepages (europages.de/ or wlw.de/ root)\n"
+            "- Search results pages (/de/suche/, /search/ paths)\n"
+            "- Blog posts, how-to guides, news, reviews\n"
+            "- Social media, PDF documents, login pages\n\n"
+            f"Search results:\n{results_text}\n\n"
+            "Return a JSON array of objects with keys: index (int), is_supplier (bool), reason (str). "
+            "Example: [{\"index\": 0, \"is_supplier\": false, \"reason\": \"Chemical company, not office supplies\"}]"
+        )
+
+        try:
+            if hasattr(self.llm, "ainvoke"):
+                response = await self.llm.ainvoke(prompt)
+            elif hasattr(self.llm, "invoke"):
+                response = await asyncio.to_thread(self.llm.invoke, prompt)
+            else:
+                return self._rule_filter_relevant(results, intent)
+
+            content = str(getattr(response, "content", response))
+            # Extract JSON array from response
+            match = re.search(r"\[.*\]", content, re.S)
+            if not match:
+                return self._rule_filter_relevant(results, intent)
+
+            judgments = json.loads(match.group(0))
+            relevant_indices = {
+                j["index"] for j in judgments
+                if isinstance(j, dict) and j.get("is_supplier") and j.get("index", -1) < len(results)
+            }
+            return [r for i, r in enumerate(results) if i in relevant_indices]
+        except Exception:
+            return self._rule_filter_relevant(results, intent)
+
+    def _rule_filter_relevant(self, results: list[SearchResult], intent: ProcurementIntent) -> list[SearchResult]:
+        """Rule-based fallback when LLM is unavailable."""
+        relevant = []
+        for r in results:
+            if not self._url_ok(r.url):
+                continue
+            # Quick content page detection
+            text = f"{r.title} {r.snippet}".lower()
+            if any(term in text for term in self.CONTENT_PAGE_KEYWORDS):
+                continue
+            # B2B domain bonus
+            domain = urlparse(r.url).netloc.lower()
+            if any(d in domain for d in self.B2B_DIRECTORY_DOMAINS):
+                relevant.append(r)
+                continue
+            # Supplier-like title detection
+            supplier_signals = ("gmbh", "ag", "kg", "gmbh & co", "lieferant", "hersteller",
+                              "großhandel", "grosshandel", "supplier", "wholesaler", "manufacturer")
+            if any(s in text for s in supplier_signals):
+                relevant.append(r)
+        return relevant[:16]
+
+    @staticmethod
+    def _merge_search_results(primary: list[SearchResult], secondary: list[SearchResult]) -> list[SearchResult]:
+        merged: dict[str, SearchResult] = {}
+        for result in [*primary, *secondary]:
+            key = WebResearcher._url_key(result.url) or result.title.lower()
+            if key and key not in merged:
+                merged[key] = result
+        return list(merged.values())
+
+    # ------------------------------------------------------------------
+    # LLM supplier extraction (improved)
+    # ------------------------------------------------------------------
+
+    async def _result_to_supplier(self, result: SearchResult, intent: ProcurementIntent, progress=None,
+                                  index: int = 1, total: int = 1) -> dict | None:
+        """Extract a structured supplier profile from a search result."""
+        evidence = await self._build_deep_evidence(result, intent, progress=progress, index=index, total=total)
+
+        if self.llm and evidence.text and not self._is_noisy_page(evidence.text):
+            llm_result = await self._llm_extract_supplier(evidence.text, result.url, intent, evidence=evidence)
+            if llm_result:
+                supplier = self._normalize_supplier(llm_result, result, intent, source="web-research-llm")
+                supplier["sourceUrls"] = evidence.source_urls
+                supplier["evidenceSnippets"] = self._evidence_snippets(evidence.text)
+                if evidence.email_candidates and not supplier.get("email"):
+                    supplier["email"] = evidence.email_candidates[0]
+                if evidence.phone_candidates and not supplier.get("phone"):
+                    supplier["phone"] = evidence.phone_candidates[0]
+                return supplier
+
+        # Rule-based fallback
+        supplier = self._normalize_supplier(
+            {
+                "name": self._clean_title(result.title),
+                "description": self._best_description(result.snippet, evidence.text),
+                "products": list(intent.keywords[:5]),
+                "capabilities": [intent.category] if intent.category else [],
+            },
+            result, intent, source="web-research",
+        )
+        supplier["sourceUrls"] = evidence.source_urls
+        supplier["evidenceSnippets"] = self._evidence_snippets(evidence.text)
+        if evidence.email_candidates:
+            supplier["email"] = evidence.email_candidates[0]
+        if evidence.phone_candidates:
+            supplier["phone"] = evidence.phone_candidates[0]
+        return supplier
+
+    async def _build_deep_evidence(self, result: SearchResult, intent: ProcurementIntent,
+                                   progress=None, index: int = 1, total: int = 1) -> DeepEvidence:
+        """Fetch the result page plus high-value same-domain pages for richer supplier evidence."""
+        if progress:
+            progress("think", f"正在深挖供应商官网 [{index}/{total}]: {result.title[:50]}", 66 + min(index, 10))
+
+        first = await self._fetch_page_compat(result.url)
+        selected_links = self._select_deep_links(result.url, first.links, intent)
+        if progress and selected_links:
+            progress("think", f"发现 {len(selected_links)} 个高价值页面（产品/联系/公司信息），继续抓取证据...", 67 + min(index, 10))
+
+        pages = [first]
+        if selected_links:
+            fetched = await asyncio.gather(*(self._fetch_page_compat(url) for url in selected_links), return_exceptions=True)
+            pages.extend(page for page in fetched if isinstance(page, PageSnapshot))
+
+        source_urls: list[str] = []
+        chunks = [result.title, result.snippet]
+        for page in pages:
+            if page.text and self._useful_page_text(page.text):
+                source_urls.append(page.url)
+                chunks.append(f"Source: {page.url}\n{page.text[:2200]}")
+
+        text = self.clean_text("\n\n".join(chunks))
+        emails = self._extract_emails(text)
+        phones = self._extract_phones(text)
+        return DeepEvidence(
+            text=text[:9000],
+            source_urls=list(dict.fromkeys(source_urls or [result.url]))[:8],
+            email_candidates=emails[:5],
+            phone_candidates=phones[:5],
+        )
+
+    async def _fetch_page_compat(self, url: str) -> PageSnapshot:
+        if hasattr(self.page_fetcher, "fetch_page"):
+            try:
+                return await self.page_fetcher.fetch_page(url)  # type: ignore[attr-defined]
+            except Exception:
+                pass
+        text = await self.page_fetcher.fetch_text(url)
+        return PageSnapshot(url=url, text=text, links=[])
+
+    def _select_deep_links(self, base_url: str, links: list[str], intent: ProcurementIntent) -> list[str]:
+        base = urlparse(base_url)
+        wanted = (
+            "product", "produkte", "sortiment", "catalog", "katalog", "shop",
+            "contact", "kontakt", "impressum", "imprint", "about", "company", "unternehmen",
+            "office", "buero", "büro", "paper", "papier", "folder", "ordner",
+        )
+        rejected = ("blog", "news", "career", "jobs", "privacy", "datenschutz", "terms", "login", "cart", "warenkorb")
+        scored: list[tuple[int, str]] = []
+        for link in links:
+            parsed = urlparse(link)
+            if parsed.netloc and parsed.netloc.lower() != base.netloc.lower():
+                continue
+            if not self._url_ok(link):
+                continue
+            lowered = link.lower()
+            if any(term in lowered for term in rejected):
+                continue
+            score = sum(4 for term in wanted if term in lowered)
+            score += sum(2 for kw in intent.keywords[:6] if kw.lower() in lowered)
+            if score > 0:
+                scored.append((score, link))
+        scored.sort(key=lambda x: (-x[0], len(x[1])))
+        return list(dict.fromkeys(link for _, link in scored))[:5]
+
+    @staticmethod
+    def _extract_emails(text: str) -> list[str]:
+        return list(dict.fromkeys(re.findall(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text)))
+
+    @staticmethod
+    def _extract_phones(text: str) -> list[str]:
+        candidates = re.findall(r"(?:\+\d{1,3}[\s()/.-]*)?(?:\d[\s()/.-]*){6,}\d", text)
+        cleaned = [re.sub(r"\s+", " ", c).strip(" .,-/") for c in candidates]
+        return list(dict.fromkeys(c for c in cleaned if len(re.sub(r"\D", "", c)) >= 7))
+
+    @staticmethod
+    def _evidence_snippets(text: str) -> list[str]:
+        lines = [line.strip() for line in re.split(r"[\n.。]", text) if len(line.strip()) > 40]
+        return lines[:4]
+
+    async def _llm_extract_supplier(
+        self, text: str, url: str, intent: ProcurementIntent, evidence: DeepEvidence | None = None
+    ) -> dict | None:
+        """LLM extracts structured supplier data from page evidence."""
+        prompt = (
+            "Extract a B2B procurement supplier profile from the evidence below.\n"
+            "Return ONLY a JSON object with these keys:\n"
+            "- name: company name (string)\n"
+            "- description: what they supply (string, max 200 chars, in the user's language)\n"
+            "- products: list of specific products they offer\n"
+            "- capabilities: list of their core capabilities (manufacturing, wholesale, etc.)\n"
+            "- country: where they are based (string)\n"
+            "- city: city name (string or null)\n"
+            "- certifications: list of ISO/IATF/etc certifications mentioned\n"
+            "- email: best procurement/sales email if present, else null\n"
+            "- phone: best sales/contact phone if present, else null\n"
+            "- address: street/address if present, else null\n"
+            "- evidence_summary: short sentence explaining which pages support this profile\n\n"
+            "If this is clearly NOT a supplier page, return {\"not_supplier\": true}.\n\n"
+            f"Procurement category: {intent.category}\n"
+            f"Target country: {intent.country}\n"
+            f"URL: {url}\n"
+            f"Fetched source URLs: {', '.join(evidence.source_urls) if evidence else url}\n"
+            f"Email candidates: {', '.join(evidence.email_candidates) if evidence else ''}\n"
+            f"Phone candidates: {', '.join(evidence.phone_candidates) if evidence else ''}\n\n"
+            f"Evidence:\n{text[:8500]}"
+        )
+
         try:
             if hasattr(self.llm, "ainvoke"):
                 response = await self.llm.ainvoke(prompt)
@@ -280,173 +657,158 @@ class WebResearcher:
                 response = await asyncio.to_thread(self.llm.invoke, prompt)
             else:
                 return None
+
             content = str(getattr(response, "content", response))
             match = re.search(r"\{.*\}", content, re.S)
             if not match:
                 return None
             parsed = json.loads(match.group(0))
+            if parsed.get("not_supplier"):
+                return None
             return parsed if isinstance(parsed, dict) and parsed.get("name") else None
         except Exception:
             return None
 
-    def fallback_suppliers(self, intent: ProcurementIntent) -> list[dict]:
-        seeds = self.fallback_supplier_seeds(intent)
-        return [
-            self.seed_to_supplier(seed, intent)
-            for seed in seeds
-        ]
+    # ------------------------------------------------------------------
+    # Rule-based query planning (fallback)
+    # ------------------------------------------------------------------
 
-    def fallback_supplier_seeds(self, intent: ProcurementIntent) -> list[dict]:
+    def _rule_plan_queries(self, intent: ProcurementIntent) -> list[str]:
+        country = intent.country or "Germany"
+        kw = " ".join(intent.keywords[:6])
+        category = intent.category or ""
+        exclusions = "-amazon -ebay -pinterest -linkedin -youtube -tiktok"
+        queries = []
+
+        # Always search B2B directories directly
+        if country == "Germany":
+            queries.append(f"site:wlw.de {kw} Lieferant {category}")
+            queries.append(f"site:europages.de {kw} Deutschland {category}")
+            queries.append(f"site:lieferanten.de {kw}")
+        queries.append(f"site:kompass.com {kw} {category} supplier {country}")
+        queries.append(f"site:industrystock.de {kw} {category}")
+
+        # General web search with B2B terms
+        queries.append(f"{kw} {category} supplier {country} B2B wholesale {exclusions}")
+        if country == "Germany":
+            queries.append(f"{kw} Lieferant Großhandel Deutschland {category} {exclusions}")
+
+        return [q for q in queries if q][:6]
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _url_ok(self, url: str) -> bool:
+        if not url or not url.startswith(("http://", "https://")):
+            return False
+        parsed = urlparse(url)
+        if parsed.path.lower().endswith(self.BLOCKED_FILE_EXTENSIONS):
+            return False
+        domain = parsed.netloc.lower().removeprefix("www.")
+        if any(domain == bd or domain.endswith(f".{bd}") for bd in self.BLOCKED_DOMAINS):
+            return False
+        # Exclude B2B directory search/browse listing pages (not individual supplier profiles)
+        if any(d in domain for d in self.B2B_DIRECTORY_DOMAINS):
+            path_lower = parsed.path.lower()
+            if any(pattern in path_lower for pattern in self.DIRECTORY_SEARCH_PATH_PATTERNS):
+                return False
+        return True
+
+    def _useful_page_text(self, text: str) -> bool:
+        normalized = (text or "").lower()
+        if not normalized.strip():
+            return False
+        if any(marker in normalized for marker in ("captcha", "access denied", "bot detection", "enable javascript", "cloudflare ray id")):
+            return False
+        if self._extract_emails(text) or self._extract_phones(text):
+            return True
+        useful_markers = (
+            "gmbh", "supplier", "lieferant", "großhandel", "wholesale", "products", "produkte",
+            "contact", "kontakt", "impressum", "address", "strasse", "straße", "berlin", "germany",
+        )
+        return len(normalized) >= 30 or any(marker in normalized for marker in useful_markers)
+
+    def _is_noisy_page(self, text: str) -> bool:
+        normalized = (text or "").lower()
+        noise = ("captcha", "access denied", "bot detection", "enable javascript",
+                 "cloudflare ray id", "request unsuccessful")
+        return any(marker in normalized for marker in noise) or len(normalized) < 50 or len(normalized) > 12000
+
+    def _fallback_suppliers(self, intent: ProcurementIntent) -> list[dict]:
         if intent.category == "office":
             return [
-                {
-                    "name": "Viking Office Deutschland",
-                    "website": "https://www.viking.de/",
-                    "country": "Germany",
-                    "description": "German office-supplies supplier for paper, folders, printer supplies and general Bürobedarf.",
-                    "products": ["A4 Papier", "Ordner", "Druckerzubehör", "Bürobedarf"],
-                    "capabilities": ["Office supplies", "Bürobedarf", "B2B ordering"],
-                    "matchScore": 72,
-                },
-                {
-                    "name": "OTTO Office",
-                    "website": "https://www.otto-office.com/de/",
-                    "country": "Germany",
-                    "description": "Office supplies, office technology and office furniture supplier in Germany.",
-                    "products": ["Kopierpapier", "Laminierfolien", "Ordner", "Büromaterial"],
-                    "capabilities": ["Office supplies", "Bürotechnik", "Büromöbel"],
-                    "matchScore": 71,
-                },
-                {
-                    "name": "Böttcher AG Bürobedarf",
-                    "website": "https://www.bueromarkt-ag.de/",
-                    "country": "Germany",
-                    "description": "German Bürobedarf and office-material online supplier.",
-                    "products": ["Papier", "Ordner", "Etiketten", "Büroartikel"],
-                    "capabilities": ["Bürobedarf", "Online procurement"],
-                    "matchScore": 69,
-                },
-                {
-                    "name": "büroshop24",
-                    "website": "https://www.bueroshop24.de/",
-                    "country": "Germany",
-                    "description": "German online office-supplies shop for paper, stationery and office equipment.",
-                    "products": ["Papier", "Schreibwaren", "Bürogeräte"],
-                    "capabilities": ["Bürobedarf", "Office equipment"],
-                    "matchScore": 68,
-                },
+                self._seed_to_supplier(s, intent)
+                for s in self.OFFICE_FALLBACK_SUPPLIERS
             ]
         return []
 
-    def seed_to_supplier(self, seed: dict, intent: ProcurementIntent) -> dict:
+    def _seed_to_supplier(self, seed: dict, intent: ProcurementIntent) -> dict:
         result = SearchResult(seed["name"], seed["website"], seed.get("description", ""))
-        return self.normalize_supplier(seed, result, intent, source="web-research-fallback")
+        return self._normalize_supplier(seed, result, intent, source="web-research-fallback")
 
-    def normalize_supplier(self, data: dict, result: SearchResult, intent: ProcurementIntent, source: str) -> dict:
+    def _normalize_supplier(
+        self, data: dict, result: SearchResult, intent: ProcurementIntent, source: str
+    ) -> dict:
         website = data.get("website") or result.url
+        score = int(data.get("matchScore") or self._score(data, result, intent))
         return {
             "id": f"web-{uuid.uuid5(uuid.NAMESPACE_URL, website or result.title)}",
-            "name": self.clean_title(data.get("name") or result.title),
+            "name": self._clean_title(data.get("name") or result.title),
             "category": data.get("category") or intent.category,
             "country": data.get("country") or intent.country,
             "city": data.get("city"),
-            "description": self.best_description(data.get("description", ""), result.snippet),
-            "products": self.ensure_list(data.get("products") or intent.keywords),
-            "certifications": self.ensure_list(data.get("certifications") or intent.certifications),
-            "contactPerson": None,
-            "phone": None,
-            "email": None,
+            "description": self._best_description(data.get("description", ""), result.snippet),
+            "products": self._ensure_list(data.get("products") or intent.keywords),
+            "certifications": self._ensure_list(data.get("certifications") or intent.certifications),
+            "contactPerson": data.get("contactPerson"),
+            "phone": data.get("phone"),
+            "email": data.get("email"),
             "website": website,
+            "address": data.get("address"),
             "employees": None,
             "annualRevenue": None,
             "established": None,
-            "capabilities": self.ensure_list(data.get("capabilities") or intent.keywords),
-            "matchScore": int(data.get("matchScore") or self.estimate_score(data, result, intent)),
+            "capabilities": self._ensure_list(data.get("capabilities") or []),
+            "matchScore": score,
             "source": source,
         }
 
-    def should_fetch_page(self, url: str) -> bool:
-        domain = urlparse(url).netloc.lower().removeprefix("www.")
-        return bool(url) and not any(term in domain for term in ("microsoft", "office.com", "outlook"))
+    def _score(self, data: dict, result: SearchResult, intent: ProcurementIntent) -> int:
+        text = f"{data.get('name', '')} {data.get('description', '')} {result.snippet} {result.url}".lower()
+        score = 40
 
-    def best_description(self, primary: str, fallback: str = "") -> str:
-        for text in (primary, fallback):
-            cleaned = self.clean_text(text)
-            if cleaned and not self.is_noisy_or_blocked(cleaned):
-                return cleaned[:420]
-        return ""
+        # B2B directory bonus — strongest signal
+        for d in self.B2B_DIRECTORY_DOMAINS:
+            if d in result.url:
+                score += 18
+                break
 
-    def extract_products(self, text: str, intent: ProcurementIntent) -> list[str]:
-        products = list(intent.keywords)
-        if intent.category == "office":
-            for term in ("A4 Papier", "Ordner", "Kopierpapier", "Druckerzubehör", "Bürobedarf"):
-                if term.lower() in text.lower() and term not in products:
-                    products.append(term)
-        return products[:8]
+        # Company name signals
+        company_signals = ("gmbh", "ag", "kg", "gmbh & co", "limited", "ltd", "sarl", "spa", "bv")
+        if any(s in result.title.lower() or s in text for s in company_signals):
+            score += 8
 
-    def extract_capabilities(self, text: str, intent: ProcurementIntent) -> list[str]:
-        caps = []
-        if intent.category == "office":
-            caps.extend(["Office supplies", "Bürobedarf"])
-        if "großhandel" in text.lower() or "wholesale" in text.lower():
-            caps.append("Wholesale")
-        if "b2b" in text.lower():
-            caps.append("B2B procurement")
-        return list(dict.fromkeys(caps or intent.keywords))[:8]
+        # B2B term signals
+        b2b_signals = ("lieferant", "hersteller", "großhandel", "wholesaler", "supplier", "manufacturer")
+        if any(s in text for s in b2b_signals):
+            score += 6
 
-    def estimate_score(self, data: dict, result: SearchResult, intent: ProcurementIntent) -> int:
-        text = f"{data.get('name', '')} {data.get('description', '')} {result.snippet}".lower()
-        score = 56
-        if intent.category == "office" and any(term in text for term in self.OFFICE_POSITIVE_TERMS):
-            score += 14
+        # Country match
         if intent.country and intent.country.lower() in text:
-            score += 6
-        if intent.country == "Germany" and ("deutschland" in text or ".de/" in result.url or result.url.endswith(".de")):
-            score += 6
-        if any(domain in result.url for domain in self.B2B_DOMAINS):
+            score += 4
+        if ".de" in result.url:
+            score += 3
+
+        # Has a real description
+        desc = data.get("description") or ""
+        if len(desc) > 30:
             score += 5
-        if result.url:
-            score += 4  # real search hits should outrank static fallback seeds for the same URL
+
         return max(0, min(100, score))
 
-    def is_noisy_or_blocked(self, text: str) -> bool:
-        normalized = (text or "").lower()
-        if not normalized:
-            return False
-        return any(marker in normalized for marker in self.NOISY_MARKERS) or len(normalized) > 1200
-
-    def is_generic_marketplace_homepage(self, url: str, title: str = "") -> bool:
-        parsed = urlparse(url or "")
-        domain = parsed.netloc.lower().removeprefix("www.")
-        path = (parsed.path or "/").strip("/")
-        if not any(domain == item or domain.endswith(f".{item}") for item in self.B2B_MARKETPLACE_ROOT_DOMAINS):
-            return False
-        if path and path.lower() not in {"de", "en", "de/", "en/"}:
-            return False
-        title_text = (title or "").lower()
-        generic_markers = ("marktplatz", "marketplace", "lieferanten und einkäufer", "buyers and sellers")
-        return not title_text or any(marker in title_text for marker in generic_markers)
-
     @staticmethod
-    def clean_text(text: str) -> str:
-        text = re.sub(r"\s+", " ", text or "").strip()
-        return text
-
-    @staticmethod
-    def clean_title(title: str) -> str:
-        title = WebResearcher.clean_text(re.sub(r"\s*[|–-]\s*(Buy|Shop|Online).*$", "", title or "", flags=re.I))
-        return title[:120] or "Web supplier"
-
-    @staticmethod
-    def ensure_list(value: Any) -> list[str]:
-        if value is None:
-            return []
-        if isinstance(value, list):
-            return [str(item) for item in value if item]
-        return [str(value)] if value else []
-
-    @staticmethod
-    def normalized_url_key(url: str) -> str:
+    def _url_key(url: str) -> str:
         parsed = urlparse(url or "")
         if not parsed.netloc:
             return ""
@@ -454,17 +816,44 @@ class WebResearcher:
         return f"{parsed.netloc.lower().removeprefix('www.')}{path}"
 
     @staticmethod
-    def tokenize(text: str) -> list[str]:
-        return re.findall(r"[\w\u4e00-\u9fffäöüÄÖÜß+-]+", (text or "").lower())
+    def _clean_title(title: str) -> str:
+        title = re.sub(r"\s*[|–-]\s*(Buy|Shop|Online|Kaufen|Bestellen|Jetzt).*$", "", title or "", flags=re.I)
+        return (title or "").strip()[:120] or "Web supplier"
+
+    @staticmethod
+    def _best_description(primary: str, fallback: str = "") -> str:
+        for text in (primary, fallback):
+            cleaned = WebResearcher.clean_text(text)
+            if cleaned and len(cleaned) > 10:
+                return cleaned[:420]
+        return ""
+
+    @staticmethod
+    def _ensure_list(value: Any) -> list[str]:
+        if value is None:
+            return []
+        if isinstance(value, list):
+            return [str(item) for item in value if item]
+        return [str(value)] if value else []
+
+    @staticmethod
+    def clean_text(text: str) -> str:
+        return re.sub(r"\s+", " ", text or "").strip()
 
     @staticmethod
     def merge_supplier_lists(primary: list[dict], secondary: list[dict]) -> list[dict]:
+        def priority(item: dict) -> tuple[int, int, int]:
+            has_evidence = 1 if item.get("sourceUrls") or item.get("evidenceSnippets") else 0
+            is_fallback = 1 if item.get("source") == "web-research-fallback" else 0
+            return (has_evidence, -is_fallback, int(item.get("matchScore", 0)))
+
         merged: dict[str, dict] = {}
         for item in [*primary, *secondary]:
-            key = WebResearcher.normalized_url_key(item.get("website", "")) or item.get("id") or item.get("name", "")
+            key = WebResearcher._url_key(item.get("website", "")) or item.get("id") or item.get("name", "")
             if not key:
                 continue
             existing = merged.get(key)
-            if not existing or item.get("matchScore", 0) > existing.get("matchScore", 0):
+            if not existing or priority(item) > priority(existing):
                 merged[key] = item
-        return sorted(merged.values(), key=lambda item: item.get("matchScore", 0), reverse=True)
+
+        return sorted(merged.values(), key=priority, reverse=True)

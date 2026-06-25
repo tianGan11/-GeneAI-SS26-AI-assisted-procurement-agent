@@ -20,7 +20,7 @@ class FakeWebResearcher:
     def __init__(self, llm=None):
         self.llm = llm
 
-    async def research(self, intent, max_suppliers=8):
+    async def research(self, intent, max_suppliers=8, progress=None):
         self.__class__.called_with.append((intent, max_suppliers))
         return [
             {
@@ -40,6 +40,44 @@ class FakeWebResearcher:
 
 
 class RetrieverWebResearchIntegrationTest(unittest.TestCase):
+    def test_database_suppliers_are_prioritized_for_repurchase_when_scores_are_close(self):
+        local_results = [{
+            "id": "db-office",
+            "name": "Existing Database Office Supplier",
+            "matchScore": 74,
+            "source": "database",
+        }]
+        web_results = [{
+            "id": "web-office",
+            "name": "New Web Office Supplier",
+            "matchScore": 82,
+            "source": "web-research-llm",
+        }]
+
+        merged = SupplierRetriever._merge_results(local_results, web_results)
+
+        self.assertEqual(merged[0]["id"], "db-office")
+        self.assertEqual(merged[0]["source"], "database")
+        self.assertEqual(merged[0]["repurchasePriority"], "database")
+
+    def test_web_supplier_can_still_win_when_score_gap_is_large(self):
+        local_results = [{
+            "id": "db-weak",
+            "name": "Weak Existing Supplier",
+            "matchScore": 45,
+            "source": "database",
+        }]
+        web_results = [{
+            "id": "web-strong",
+            "name": "Strong Web Supplier",
+            "matchScore": 90,
+            "source": "web-research-llm",
+        }]
+
+        merged = SupplierRetriever._merge_results(local_results, web_results)
+
+        self.assertEqual(merged[0]["id"], "web-strong")
+
     def test_low_quality_local_results_are_merged_with_web_researcher_results(self):
         intent = ProcurementIntent(category="office", country="Germany", keywords=["A4", "Papier"])
         local_supplier = {

@@ -72,11 +72,23 @@ export interface Translation {
     cardEstablished: string
     cardCapabilities: string
     cardCerts: string
+    cardEvidence: string
+    cardSources: string
     match: string
     colName: string
     colLocation: string
     colEmail: string
     colWebsite: string
+    agentProgress: {
+      eyebrow: string
+      runningTitle: string
+      failedTitle: string
+      description: string
+      progress: string
+      thoughtLogLabel: string
+      emptyText: string
+      activeLabel: string
+    }
   }
 
   comparison: {
@@ -251,11 +263,24 @@ export const translations: Record<Language, Translation> = {
       cardEstablished: 'Established',
       cardCapabilities: 'Core capabilities',
       cardCerts: 'Certifications',
+      cardEvidence: 'Evidence from crawled pages',
+      cardSources: 'Sources opened by Agent',
       match: 'match',
       colName: 'Supplier',
       colLocation: 'Location',
       colEmail: 'Email',
       colWebsite: 'Website',
+      agentProgress: {
+        eyebrow: 'Procurement Agent thinking',
+        runningTitle: 'Procurement Agent is thinking',
+        failedTitle: 'Agent needs attention',
+        description:
+          'I am researching live supplier sources, filtering irrelevant pages, extracting supplier signals, and preparing a procurement-ready shortlist.',
+        progress: 'Progress',
+        thoughtLogLabel: 'Agent thought log',
+        emptyText: 'Waiting for the first thought from the backend agent...',
+        activeLabel: 'Working live — new steps will appear here',
+      },
     },
     comparison: {
       inputLabel: 'Procurement requirement',
@@ -434,11 +459,23 @@ export const translations: Record<Language, Translation> = {
       cardEstablished: '成立年份',
       cardCapabilities: '核心能力',
       cardCerts: '资质认证',
+      cardEvidence: '爬取页面证据',
+      cardSources: 'Agent 打开的来源页面',
       match: '匹配度',
       colName: '供应商',
       colLocation: '所在地',
       colEmail: '邮箱',
       colWebsite: '网站',
+      agentProgress: {
+        eyebrow: '采购 Agent 思考中',
+        runningTitle: '采购 Agent 正在思考',
+        failedTitle: 'Agent 需要关注',
+        description: '我正在实时检索供应商来源、过滤无关网页、提取供应商信号，并整理成可用于采购决策的候选名单。',
+        progress: '进度',
+        thoughtLogLabel: 'Agent 思考流',
+        emptyText: '正在等待后端 Agent 的第一条思考...',
+        activeLabel: '正在实时工作，新步骤会自动出现',
+      },
     },
     comparison: {
       inputLabel: '采购需求输入',

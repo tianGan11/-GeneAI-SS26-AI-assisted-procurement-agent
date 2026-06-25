@@ -35,6 +35,12 @@ export type SupplierCategoryKey =
   | 'glassRaw' // 玻璃原片 / float glass
   | 'hardware' // 五金件 / mounting hardware
   | 'packaging' // 包装材料
+  | 'cleaning'
+  | 'office'
+  | 'safetyShoes'
+  | 'firstAid'
+  | 'equipment'
+  | string
 
 export interface Supplier {
   id: string
@@ -55,6 +61,10 @@ export interface Supplier {
   established?: number
   capabilities?: string[]
   certifications?: string[]
+  /** URLs fetched during deep supplier research. */
+  sourceUrls?: string[]
+  /** Short text snippets supporting the extracted supplier profile. */
+  evidenceSnippets?: string[]
   /** 0–100 relevance to the query. */
   matchScore: number
 }
