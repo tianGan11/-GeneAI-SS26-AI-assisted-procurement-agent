@@ -23,7 +23,7 @@ class ProcurementAgent:
         self.quotes = query_products_sync()
         self.parser = IntentParser(self.llm)
         chroma_collection = self._create_chroma_collection()
-        self.retriever = SupplierRetriever(chroma_collection, self.suppliers)
+        self.retriever = SupplierRetriever(chroma_collection, self.suppliers, llm=self.llm)
         self.ranker = LLMRanker(self.llm)
 
     async def search_suppliers(self, query: str) -> dict:

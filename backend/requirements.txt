@@ -21,6 +21,8 @@ openai>=1.55.0
 dspy-ai>=2.5.0
 
 # Web search fallback
+# Prefer the renamed package; keep duckduckgo-search as compatibility fallback.
+ddgs>=9.0.0
 duckduckgo-search>=6.3.0
 
 # Database (PostgreSQL / Supabase)

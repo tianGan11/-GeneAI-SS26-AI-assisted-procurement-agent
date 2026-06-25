@@ -3,18 +3,18 @@ from __future__ import annotations
 import json
 import math
 import os
-import uuid
 from collections import Counter
 from typing import Any
-from urllib.parse import urlparse
 
 from agent.parser import ProcurementIntent
+from web_research.researcher import WebResearcher
 
 
 class SupplierRetriever:
-    def __init__(self, chroma_collection, suppliers: list[dict]):
+    def __init__(self, chroma_collection, suppliers: list[dict], llm=None):
         self.collection = chroma_collection
         self.suppliers = suppliers
+        self.llm = llm
         self._supplier_by_id = {supplier["id"]: supplier for supplier in suppliers}
         self._embedding_model = None
         self._build_collection()
@@ -30,60 +30,9 @@ class SupplierRetriever:
         return local_results[:top_k]
 
     async def _web_search(self, intent: ProcurementIntent) -> list[dict]:
-        """Use duckduckgo to find suppliers, then return normalized supplier-like records."""
-        query = f"{self._intent_to_query(intent)} automotive supplier"
-        try:
-            from duckduckgo_search import DDGS
-
-            with DDGS(timeout=10) as ddgs:
-                results = list(ddgs.text(query, max_results=5))
-        except Exception:
-            return []
-
-        web_suppliers = []
-        dynamic_scraper = None
-        deep_scrapes = 0
-        for result in results:
-            title = result.get("title") or "Web supplier"
-            href = result.get("href") or result.get("url") or ""
-            body = result.get("body") or ""
-            supplier = {
-                "id": f"web-{uuid.uuid5(uuid.NAMESPACE_URL, href or title)}",
-                "name": title,
-                "category": intent.category,
-                "country": intent.country,
-                "city": None,
-                "description": body,
-                "products": intent.keywords,
-                "certifications": intent.certifications,
-                "contactPerson": None,
-                "phone": None,
-                "email": None,
-                "website": href,
-                "employees": None,
-                "annualRevenue": None,
-                "established": None,
-                "capabilities": intent.keywords,
-                "matchScore": 55,
-                "source": "web",
-            }
-            if href and deep_scrapes < 3 and self._is_b2b_domain(href):
-                if dynamic_scraper is None:
-                    try:
-                        from scraper.dynamic_scraper import DynamicScraper
-
-                        dynamic_scraper = DynamicScraper()
-                    except Exception:
-                        dynamic_scraper = False
-                if dynamic_scraper:
-                    deep_scrapes += 1
-                    try:
-                        scraped_supplier = dynamic_scraper.scrape_supplier(href)
-                        supplier = self._merge_web_supplier(supplier, scraped_supplier, intent)
-                    except Exception:
-                        pass
-            web_suppliers.append(supplier)
-        return web_suppliers
+        """Run agent-like web research to discover external supplier candidates."""
+        researcher = WebResearcher(llm=self.llm)
+        return await researcher.research(intent, max_suppliers=8)
 
     def _build_collection(self) -> None:
         """Deferred build — called lazily on first _search_chroma call."""
@@ -203,48 +152,6 @@ class SupplierRetriever:
         for item in web_results:
             merged.setdefault(item["id"], item)
         return sorted(merged.values(), key=lambda item: item.get("matchScore", 0), reverse=True)
-
-    @staticmethod
-    def _is_b2b_domain(url: str) -> bool:
-        domain = urlparse(url).netloc.lower().removeprefix("www.")
-        b2b_domains = (
-            "wlw.de",
-            "wer-liefert-was.de",
-            "industrie.de",
-            "industrystock.de",
-            "directindustry.de",
-            "directindustry.com",
-            "europages.de",
-            "europages.com",
-            "kompass.com",
-            "thomasnet.com",
-            "b2bmarktplatz.de",
-            "directory.de",
-        )
-        return any(domain == item or domain.endswith(f".{item}") for item in b2b_domains)
-
-    @staticmethod
-    def _merge_web_supplier(web_supplier: dict, scraped: dict, intent: ProcurementIntent) -> dict:
-        """Merge DuckDuckGo summary with deep-scraped data. Scraped data wins."""
-        if not scraped or not scraped.get("name"):
-            return web_supplier
-        merged = dict(web_supplier)
-        for field in ("name", "description", "products", "certifications", "capabilities",
-                       "phone", "email", "city", "employees", "annualRevenue", "established"):
-            if scraped.get(field):
-                merged[field] = scraped[field]
-        merged["category"] = merged.get("category") or intent.category
-        merged["country"] = merged.get("country") or intent.country
-        if not merged.get("certifications"):
-            merged["certifications"] = intent.certifications
-        if not merged.get("products"):
-            merged["products"] = intent.keywords
-        if not merged.get("capabilities"):
-            merged["capabilities"] = intent.keywords
-        merged["matchScore"] = max(web_supplier.get("matchScore", 55),
-                                   scraped.get("matchScore", 50))
-        merged["source"] = "deep-web"
-        return merged
 
     @staticmethod
     def _intent_to_query(intent: ProcurementIntent) -> str:
