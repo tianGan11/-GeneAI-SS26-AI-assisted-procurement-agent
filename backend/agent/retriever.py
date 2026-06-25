@@ -19,20 +19,20 @@ class SupplierRetriever:
         self._embedding_model = None
         self._build_collection()
 
-    async def search(self, intent: ProcurementIntent, top_k: int = 10) -> list[dict]:
+    async def search(self, intent: ProcurementIntent, top_k: int = 10, progress=None) -> list[dict]:
         """Search local vector DB by intent. If results < 3 or top score < 60, fallback to web search."""
         query = self._intent_to_query(intent)
         local_results = self._search_local(query, intent, top_k)
         if len(local_results) < 3 or (local_results and local_results[0].get("matchScore", 0) < 60):
-            web_results = await self._web_search(intent)
+            web_results = await self._web_search(intent, progress=progress)
             merged = self._merge_results(local_results, web_results)
             return merged[:top_k]
         return local_results[:top_k]
 
-    async def _web_search(self, intent: ProcurementIntent) -> list[dict]:
+    async def _web_search(self, intent: ProcurementIntent, progress=None) -> list[dict]:
         """Run agent-like web research to discover external supplier candidates."""
         researcher = WebResearcher(llm=self.llm)
-        return await researcher.research(intent, max_suppliers=8)
+        return await researcher.research(intent, max_suppliers=8, progress=progress)
 
     def _build_collection(self) -> None:
         """Deferred build — called lazily on first _search_chroma call."""
@@ -134,6 +134,8 @@ class SupplierRetriever:
         score = max(0, min(100, score))
         enriched = dict(supplier)
         enriched["matchScore"] = score
+        enriched.setdefault("source", "database")
+        enriched.setdefault("repurchasePriority", "database")
         return enriched
 
     def _lexical_score(self, query: str, supplier: dict) -> int:
@@ -148,10 +150,22 @@ class SupplierRetriever:
 
     @staticmethod
     def _merge_results(local_results: list[dict], web_results: list[dict]) -> list[dict]:
-        merged: dict[str, dict] = {item["id"]: item for item in local_results}
+        merged: dict[str, dict] = {}
+        for item in local_results:
+            enriched = dict(item)
+            enriched.setdefault("source", "database")
+            enriched.setdefault("repurchasePriority", "database")
+            merged[enriched["id"]] = enriched
         for item in web_results:
             merged.setdefault(item["id"], item)
-        return sorted(merged.values(), key=lambda item: item.get("matchScore", 0), reverse=True)
+        return sorted(merged.values(), key=SupplierRetriever._ranking_score, reverse=True)
+
+    @staticmethod
+    def _ranking_score(item: dict) -> int:
+        score = int(item.get("matchScore", 0))
+        if item.get("source") == "database" or item.get("repurchasePriority") == "database":
+            score += 12
+        return max(0, min(120, score))
 
     @staticmethod
     def _intent_to_query(intent: ProcurementIntent) -> str:

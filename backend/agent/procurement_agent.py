@@ -26,11 +26,43 @@ class ProcurementAgent:
         self.retriever = SupplierRetriever(chroma_collection, self.suppliers, llm=self.llm)
         self.ranker = LLMRanker(self.llm)
 
-    async def search_suppliers(self, query: str) -> dict:
-        """Full pipeline: parse → retrieve → rank → return"""
+    async def search_suppliers(self, query: str, progress=None) -> dict:
+        """Full pipeline: parse → retrieve → rank → return.
+
+        progress, when provided, is a lightweight callback used by the async
+        job API to expose real backend phases to the frontend.
+        Each progress call emits a freeform agent thought — the frontend
+        prints them as-is without further phase-to-label mapping.
+        """
+        if progress:
+            progress("parse", "正在解析您的采购需求，提取品类、地区、预算等关键信息...", 10)
+
         intent = await self.parser.parse(query)
-        candidates = await self.retriever.search(intent)
+        category = intent.category or "general procurement"
+        country = intent.country or "any target country"
+        max_price = intent.max_price or 0
+
+        if progress:
+            budget_detail = f"预算 €{max_price}" if max_price else "未设置预算"
+            progress("parse", f"已理解需求：品类「{category}」、目标地区「{country}」、{budget_detail}。", 35)
+
+        if progress:
+            progress("retrieve", f"正在检索「{category}」相关的供应商资源，包括本地数据库和外部网页研究...", 45)
+
+        candidates = await self.retriever.search(intent, progress=progress)
+
+        if progress:
+            progress("retrieve", f"已收集到 {len(candidates)} 个候选供应商，正在进行质量过滤和相关性匹配...", 70)
+
+        if progress:
+            progress("rank", "正在根据您的采购需求对候选供应商进行智能排序...", 80)
+
         ranked = await self.ranker.rank_suppliers(query, candidates)
+
+        top = ranked[0]["name"] if ranked else "未找到匹配供应商"
+        if progress:
+            progress("rank", f"排序完成！共 {len(ranked)} 个候选供应商，最佳匹配：{top}。", 95)
+
         return {"intent": intent.model_dump(), "results": ranked}
 
     async def search_quotes(

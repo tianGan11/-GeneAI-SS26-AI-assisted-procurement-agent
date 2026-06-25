@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Translation } from '../i18n'
 import type { Supplier, ConversationRecord, FeedbackRecord } from '../types'
 import { MOCK_SUPPLIERS } from '../data/suppliers'
-import { api, apiEnabled } from '../lib/api'
+import { api, apiEnabled, type SourcingJob } from '../lib/api'
 import { useMemory } from '../context/MemoryContext'
 import { StepIndicator, ExportPrintToolbar, AnalyzeButton } from '../components/shared'
 import { FeedbackModal } from '../components/FeedbackModal'
@@ -25,6 +25,8 @@ function SupplierCard({
   const contactSub = [supplier.email, supplier.website].filter(Boolean).join(' · ')
   const capabilities = supplier.capabilities ?? []
   const certifications = supplier.certifications ?? []
+  const evidenceSnippets = supplier.evidenceSnippets ?? []
+  const sourceUrls = supplier.sourceUrls ?? []
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md">
@@ -58,6 +60,38 @@ function SupplierCard({
               <span key={cap} className="rounded-md bg-blue-50 px-2 py-1 text-xs text-blue-700">
                 {cap}
               </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {evidenceSnippets.length > 0 && (
+        <div className="mt-4 border-t border-slate-100 pt-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">{s.cardEvidence}</p>
+          <div className="space-y-1.5">
+            {evidenceSnippets.slice(0, 3).map((snippet, idx) => (
+              <p key={`${supplier.id}-evidence-${idx}`} className="rounded-lg bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
+                {snippet}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {sourceUrls.length > 0 && (
+        <div className="mt-4 border-t border-slate-100 pt-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">{s.cardSources}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {sourceUrls.slice(0, 4).map((url) => (
+              <a
+                key={url}
+                href={url}
+                target="_blank"
+                rel="noreferrer"
+                className="max-w-full truncate rounded-md border border-blue-100 bg-blue-50 px-2 py-1 text-xs text-blue-700 hover:bg-blue-100"
+              >
+                {url.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+              </a>
             ))}
           </div>
         </div>
@@ -100,6 +134,89 @@ function Field({ label, value, sub }: { label: string; value?: string; sub?: str
   )
 }
 
+type SearchStatus = 'idle' | 'running' | 'success' | 'empty' | 'error'
+
+function AgentProgressPanel({ job, t }: { job: SourcingJob | null; t: Translation }) {
+  const copy = t.sourcing.agentProgress
+  const progress = job?.progress ?? 0
+  const events = job?.events ?? []
+  const isRunning = job?.status !== 'failed' && job?.status !== 'completed'
+  const statusLabel = job?.status === 'failed' ? copy.failedTitle : copy.runningTitle
+  const eventListRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    const list = eventListRef.current
+    if (!list) return
+    list.scrollTo({ top: list.scrollHeight, behavior: 'smooth' })
+  }, [events.length, job?.status])
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-blue-100 bg-gradient-to-br from-white via-blue-50/70 to-indigo-50/60 shadow-sm print:hidden">
+      <div className="border-b border-white/70 px-6 py-5 backdrop-blur">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-sm font-bold text-white shadow-lg shadow-blue-200">
+              {isRunning ? (
+                <span className="relative flex h-5 w-5 items-center justify-center" aria-label="Agent is working">
+                  <span className="absolute h-5 w-5 animate-ping rounded-full bg-white/50" />
+                  <span className="h-3 w-3 animate-pulse rounded-full bg-white" />
+                </span>
+              ) : (
+                'AI'
+              )}
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-500">{copy.eyebrow}</p>
+              <h2 className="mt-1 text-lg font-semibold text-slate-950">{statusLabel}</h2>
+              {isRunning && (
+                <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-blue-100/80 px-2.5 py-1 text-xs font-semibold text-blue-700 ring-1 ring-blue-200">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-500 opacity-60" />
+                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-blue-600" />
+                  </span>
+                  {copy.activeLabel}
+                </div>
+              )}
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">{copy.description}</p>
+            </div>
+          </div>
+          <div className="rounded-2xl bg-white/85 px-4 py-3 text-right shadow-sm ring-1 ring-blue-100">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{copy.progress}</p>
+            <p className="text-2xl font-semibold text-blue-700">{progress}%</p>
+          </div>
+        </div>
+
+        <div className="mt-5 h-2 overflow-hidden rounded-full bg-white ring-1 ring-blue-100">
+          <div className="relative h-full overflow-hidden rounded-full bg-blue-600 transition-all duration-500" style={{ width: `${progress}%` }}>
+            {isRunning && <span className="absolute inset-0 animate-pulse bg-white/30" />}
+          </div>
+        </div>
+      </div>
+
+      <div className="p-5">
+        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{copy.thoughtLogLabel}</p>
+        <div ref={eventListRef} className="mt-3 max-h-64 space-y-2.5 overflow-auto pr-1">
+          {events.length === 0 ? (
+            <p className="text-sm leading-6 text-slate-500 italic">{copy.emptyText}</p>
+          ) : (
+            events.map((event) => (
+              <div
+                key={`${event.timestamp}-${event.phase}-${event.message}`}
+                className="flex items-start gap-2.5 rounded-xl bg-white/80 px-3.5 py-2.5 shadow-sm ring-1 ring-inset ring-blue-100"
+              >
+                <span className="mt-0.5 text-xs text-slate-400 tabular-nums">
+                  {new Date(event.timestamp).toLocaleTimeString()}
+                </span>
+                <p className="text-sm leading-6 text-slate-700">{event.message}</p>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export function SourcingModule({
   t,
   restore,
@@ -115,6 +232,8 @@ export function SourcingModule({
   const [currentStep, setCurrentStep] = useState(3)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [hasRun, setHasRun] = useState(!apiEnabled)
+  const [searchStatus, setSearchStatus] = useState<SearchStatus>(apiEnabled ? 'idle' : 'success')
+  const [searchJob, setSearchJob] = useState<SourcingJob | null>(null)
   const [searchError, setSearchError] = useState(false)
   const [feedbackFor, setFeedbackFor] = useState<string | null>(null)
   // Reopening a past conversation re-links feedback to that same record.
@@ -130,31 +249,72 @@ export function SourcingModule({
     candidateNames: list.map((r) => r.name),
   })
 
+  const pollSearchJob = async (jobId: string): Promise<SourcingJob> => {
+    for (;;) {
+      await new Promise((resolve) => setTimeout(resolve, 1500))
+      const job = await api.sourcing.getJob(jobId)
+      setSearchJob(job)
+
+      if (job.progress >= 35 && job.progress < 75) setCurrentStep(2)
+      if (job.progress >= 75) setCurrentStep(3)
+      if (job.status === 'completed' || job.status === 'failed') return job
+    }
+  }
+
   const handleAnalyze = async () => {
     setIsAnalyzing(true)
-    setHasRun(true)
+    setHasRun(false)
+    setSearchStatus('running')
+    setSearchJob(null)
+    setSearchError(false)
+    setResults([])
     setCurrentStep(1)
-    setTimeout(() => setCurrentStep(2), 700)
-    setTimeout(() => setCurrentStep(3), 1400)
 
-    let list = results
-    if (apiEnabled) {
-      setSearchError(false)
-      try {
-        const res = await api.sourcing.search(query)
-        list = res.results
-      } catch {
-        list = []
-        setSearchError(true)
+    let list: Supplier[]
+    try {
+      if (apiEnabled) {
+        const created = await api.sourcing.createJob(query)
+        setSearchJob(created)
+        let finished: SourcingJob
+        try {
+          finished = await api.sourcing.streamJob(created.jobId, (job) => {
+            setSearchJob(job)
+            if (job.progress >= 35 && job.progress < 75) setCurrentStep(2)
+            if (job.progress >= 75) setCurrentStep(3)
+          })
+        } catch {
+          // Some deployment proxies buffer or close long-lived streams. Keep the
+          // stable polling path as a fallback so the UX still progresses.
+          finished = await pollSearchJob(created.jobId)
+        }
+        if (finished.status === 'failed') {
+          list = finished.results ?? []
+          setResults(list)
+          setSearchError(true)
+          setSearchStatus('error')
+        } else {
+          list = finished.results ?? []
+          setResults(list)
+          setSearchStatus(list.length > 0 ? 'success' : 'empty')
+        }
+      } else {
+        // Keep the step animation visible in mock mode.
+        await new Promise((r) => setTimeout(r, 1800))
+        list = MOCK_SUPPLIERS
+        setResults(list)
+        setSearchStatus('success')
       }
-      setResults(list)
-    } else {
-      // Keep the step animation visible in mock mode.
-      await new Promise((r) => setTimeout(r, 1800))
+      setHasRun(true)
+      setActiveConversationId(await remember(buildRecord(list)))
+    } catch {
+      setResults([])
+      setSearchError(true)
+      setSearchStatus('error')
+      setHasRun(true)
+    } finally {
+      setIsAnalyzing(false)
+      setCurrentStep(3)
     }
-
-    setIsAnalyzing(false)
-    setActiveConversationId(await remember(buildRecord(list)))
   }
 
   const handleFeedbackSubmit = async (feedback: FeedbackRecord) => {
@@ -185,6 +345,8 @@ export function SourcingModule({
       <section className="rounded-xl border border-slate-200 bg-white px-8 py-6 shadow-sm print:hidden">
         <StepIndicator currentStep={currentStep} steps={t.steps} />
       </section>
+
+      {searchJob && searchStatus !== 'idle' && <AgentProgressPanel job={searchJob} t={t} />}
 
       {hasRun && (
         <section className="space-y-4">

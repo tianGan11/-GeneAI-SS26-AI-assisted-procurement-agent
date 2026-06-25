@@ -27,7 +27,7 @@ from api.sourcing import router as sourcing_router
 from api.vault import router as vault_router
 
 
-load_dotenv()
+load_dotenv(override=True)
 
 
 # ---------------------------------------------------------------------------

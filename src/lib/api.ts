@@ -100,12 +100,72 @@ async function request<T>(
   return (await res.json()) as T
 }
 
+async function streamRequest<T>(path: string, onEvent: (event: T) => void): Promise<T> {
+  const token = getToken()
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'GET',
+    headers: {
+      Accept: 'text/event-stream',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  })
+
+  if (!res.ok || !res.body) {
+    throw new ApiError(`Stream failed (${res.status})`, 'STREAM_ERROR', res.status)
+  }
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let latest: T | null = null
+
+  for (;;) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const chunks = buffer.split('\n\n')
+    buffer = chunks.pop() ?? ''
+
+    for (const chunk of chunks) {
+      const dataLine = chunk
+        .split('\n')
+        .find((line) => line.startsWith('data: '))
+      if (!dataLine) continue
+      latest = JSON.parse(dataLine.slice(6)) as T
+      onEvent(latest)
+    }
+  }
+
+  if (latest === null) {
+    throw new ApiError('Stream ended without data', 'STREAM_EMPTY', 0)
+  }
+  return latest
+}
+
 // --- Typed endpoint methods ------------------------------------------------
 
 export interface ComparisonFilters {
   minPrice?: number
   maxPrice?: number
   deliveryTime?: DeliveryOptionKey
+}
+
+export interface SourcingJobEvent {
+  timestamp: number
+  phase: string
+  message: string
+  progress: number
+}
+
+export interface SourcingJob {
+  jobId: string
+  status: 'queued' | 'running' | 'completed' | 'failed'
+  progress: number
+  step: string
+  events: SourcingJobEvent[]
+  intent?: Record<string, unknown> | null
+  results: Supplier[]
+  error?: string | null
 }
 
 /** New-conversation payload: a record without server-generated fields. */
@@ -132,6 +192,11 @@ export const api = {
   sourcing: {
     search: (query: string) =>
       request<{ results: Supplier[] }>('/api/sourcing/search', { method: 'POST', body: { query } }),
+    createJob: (query: string) =>
+      request<SourcingJob>('/api/sourcing/search-jobs', { method: 'POST', body: { query } }),
+    getJob: (jobId: string) => request<SourcingJob>(`/api/sourcing/search-jobs/${jobId}`),
+    streamJob: (jobId: string, onEvent: (job: SourcingJob) => void) =>
+      streamRequest<SourcingJob>(`/api/sourcing/search-jobs/${jobId}/events`, onEvent),
   },
 
   comparison: {

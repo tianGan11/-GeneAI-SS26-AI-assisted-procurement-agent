@@ -37,6 +37,7 @@ class LLMRanker:
             else:
                 scored["matchScore"] = self._heuristic_score(query, candidate)
                 scored["reason"] = self._supplier_reason(query, candidate)
+            scored["matchScore"] = self._apply_repurchase_bonus(scored)
             ranked.append(scored)
         return sorted(ranked, key=lambda item: item.get("matchScore", 0), reverse=True)
 
@@ -92,6 +93,8 @@ class LLMRanker:
                     "price": item.get("unitPriceEur"),
                     "deliveryDays": item.get("deliveryDays"),
                     "baseScore": item.get("matchScore"),
+                    "source": item.get("source"),
+                    "repurchasePriority": item.get("repurchasePriority"),
                 }
                 for item in candidates
             ]
@@ -107,6 +110,7 @@ class LLMRanker:
                 f"{system_instruction}"
                 f"Rank these procurement {item_type} candidates for the query. "
                 "Return one result per candidate id with matchScore 0-100 and a concise reason. "
+                "For suppliers, candidates with source=database / repurchasePriority=database are existing database suppliers and should receive a modest repurchase preference when relevance is close; do not let this override a clearly much better new web supplier. "
                 f"Query: {query}\nCandidates: {payload}"
             )
             structured_llm = self.llm.with_structured_output(RankingResponse)
@@ -147,6 +151,13 @@ class LLMRanker:
         elif delivery_days <= 3:
             score += 5
         score += round(max(0, rating - 4.0) * 5)
+        return max(0, min(100, score))
+
+    @staticmethod
+    def _apply_repurchase_bonus(candidate: dict) -> int:
+        score = int(candidate.get("matchScore", 0))
+        if candidate.get("source") == "database" or candidate.get("repurchasePriority") == "database":
+            score += 12
         return max(0, min(100, score))
 
     @staticmethod
