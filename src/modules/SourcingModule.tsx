@@ -273,27 +273,37 @@ export function SourcingModule({
     let list: Supplier[]
     try {
       if (apiEnabled) {
-        const created = await api.sourcing.createJob(query)
-        setSearchJob(created)
-        let finished: SourcingJob
         try {
-          finished = await api.sourcing.streamJob(created.jobId, (job) => {
-            setSearchJob(job)
-            if (job.progress >= 35 && job.progress < 75) setCurrentStep(2)
-            if (job.progress >= 75) setCurrentStep(3)
-          })
+          // Preferred path: async job with live "Agent Thinking" progress (SSE).
+          const created = await api.sourcing.createJob(query)
+          setSearchJob(created)
+          let finished: SourcingJob
+          try {
+            finished = await api.sourcing.streamJob(created.jobId, (job) => {
+              setSearchJob(job)
+              if (job.progress >= 35 && job.progress < 75) setCurrentStep(2)
+              if (job.progress >= 75) setCurrentStep(3)
+            })
+          } catch {
+            // Some deployment proxies buffer or close long-lived streams. Keep the
+            // stable polling path as a fallback so the UX still progresses.
+            finished = await pollSearchJob(created.jobId)
+          }
+          list = finished.results ?? []
+          if (finished.status === 'failed') {
+            setResults(list)
+            setSearchError(true)
+            setSearchStatus('error')
+          } else {
+            setResults(list)
+            setSearchStatus(list.length > 0 ? 'success' : 'empty')
+          }
         } catch {
-          // Some deployment proxies buffer or close long-lived streams. Keep the
-          // stable polling path as a fallback so the UX still progresses.
-          finished = await pollSearchJob(created.jobId)
-        }
-        if (finished.status === 'failed') {
-          list = finished.results ?? []
-          setResults(list)
-          setSearchError(true)
-          setSearchStatus('error')
-        } else {
-          list = finished.results ?? []
+          // Backend has no job endpoints yet (older deploy → 404). Fall back to the
+          // plain synchronous search so results still load (without live progress).
+          setSearchJob(null)
+          const res = await api.sourcing.search(query)
+          list = res.results ?? []
           setResults(list)
           setSearchStatus(list.length > 0 ? 'success' : 'empty')
         }
