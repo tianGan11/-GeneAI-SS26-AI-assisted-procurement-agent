@@ -51,11 +51,15 @@ export function LoginPage({
     <div className="flex min-h-screen w-full">
       {/* Brand panel */}
       <div className="relative hidden w-1/2 flex-col justify-between bg-slate-900 p-12 text-white lg:flex">
-        <img
-          src="/fuyao-europe-logo.png"
-          alt="Fuyao Europe"
-          className="h-10 w-auto object-contain object-left brightness-0 invert"
-        />
+        {/* Logo asset has a white (non-transparent) background, so sit it on a
+            white badge rather than inverting it (which would turn it into a white box). */}
+        <div className="inline-block w-fit rounded-lg bg-white px-3 py-2 shadow-sm">
+          <img
+            src="/fuyao-europe-logo.png"
+            alt="Fuyao Europe"
+            className="h-8 w-auto object-contain object-left"
+          />
+        </div>
         <div>
           <h2 className="text-3xl font-bold leading-tight">{t.appName}</h2>
           <p className="mt-3 max-w-md text-slate-300">{t.login.subtitle}</p>
