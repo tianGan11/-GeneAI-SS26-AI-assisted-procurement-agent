@@ -117,10 +117,8 @@ export function ComparisonModule({
   const [maxPrice, setMaxPrice] = useState(init?.maxPrice ?? '')
   const [deliveryTime, setDeliveryTime] = useState<DeliveryOptionKey>(init?.deliveryTime ?? 'unlimited')
   const [weights, setWeights] = useState<FactorWeights>(init?.weights ?? DEFAULT_WEIGHTS)
-  // If reopening from memory with saved results, restore them directly.
-  const restoredResults = restore?.results as ComparisonItem[] | undefined
-  const [items, setItems] = useState<ComparisonItem[]>(restoredResults ?? (apiEnabled ? [] : MOCK_COMPARISON))
-  const [currentStep, setCurrentStep] = useState(restoredResults ? 3 : 0)
+  const [items, setItems] = useState<ComparisonItem[]>(apiEnabled ? [] : MOCK_COMPARISON)
+  const [currentStep, setCurrentStep] = useState(0)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [searchError, setSearchError] = useState(false)
   const [feedbackFor, setFeedbackFor] = useState<string | null>(null)
@@ -147,7 +145,6 @@ export function ComparisonModule({
     restore: { query: requirement, minPrice, maxPrice, deliveryTime, weights },
     resultCount: ranked.length,
     candidateNames: ranked.map((row) => row.vendor),
-    results: ranked as unknown as Record<string, unknown>[],
   })
 
   const handleAnalyze = async () => {
@@ -248,12 +245,6 @@ export function ComparisonModule({
       <section className="rounded-xl border border-slate-200 bg-white px-8 py-6 shadow-sm print:hidden">
         <StepIndicator currentStep={currentStep} steps={t.steps} />
       </section>
-
-      {restore?.results && (
-        <div className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-800 shadow-sm">
-          🔁 {t.memory.restoredBanner}
-        </div>
-      )}
 
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm print:border-0 print:shadow-none">
         <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

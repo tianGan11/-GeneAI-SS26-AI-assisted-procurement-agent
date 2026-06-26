@@ -254,25 +254,17 @@ export function SourcingModule({
   // Only the `restore` prop (from Memory module → conversation history) can
   // pre-fill state.
 
-  const savedResults = restore?.results as Supplier[] | undefined
-  const savedHasRun = !!savedResults
-
   const [query, setQuery] = useState(
     restore?.restore?.query ?? ''
   )
   const [results, setResults] = useState<Supplier[]>(
-    savedResults ?? (apiEnabled ? [] : MOCK_SUPPLIERS)
+    apiEnabled ? [] : MOCK_SUPPLIERS
   )
-  const [currentStep, setCurrentStep] = useState(
-    savedResults ? 3 : 0
-  )
+  const [currentStep, setCurrentStep] = useState(0)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [hasRun, setHasRun] = useState(
-    savedHasRun || !apiEnabled
-  )
+  const [hasRun, setHasRun] = useState(!apiEnabled)
   const [searchStatus, setSearchStatus] = useState<SearchStatus>(
-    savedResults ? 'success'
-    : apiEnabled ? 'idle' : 'success'
+    apiEnabled ? 'idle' : 'success'
   )
   const [searchJob, setSearchJob] = useState<SourcingJob | null>(null)
   const [searchError, setSearchError] = useState(false)
@@ -282,43 +274,16 @@ export function SourcingModule({
   )
 
   // ── Structured fields state (双模输入表单) ──────────────────────────────
-  const sf = restore?.restore
-  const [structProductName, setStructProductName] = useState(
-    sf?.productName ?? ''
-  )
-  const [structQuantity, setStructQuantity] = useState(
-    sf?.quantity ?? ''
-  )
-  const [structUnit, setStructUnit] = useState(
-    sf?.unit ?? 'pcs'
-  )
-  const [structBrand, setStructBrand] = useState(
-    sf?.brand ?? ''
-  )
-  const [structCategory, setStructCategory] = useState(
-    sf?.structuredCategory ?? ''
-  )
-  const [structCountry, setStructCountry] = useState(
-    sf?.structuredCountry ?? ''
-  )
-  const [structCerts, setStructCerts] = useState(
-    sf?.structuredCerts ?? ''
-  )
-
-  /** Build the structured fields payload for the API. Returns undefined when empty. */
-  const getStructuredPayload = () => {
-    const p = {
-      productName: structProductName || undefined,
-      quantity: structQuantity || undefined,
-      unit: structUnit !== 'pcs' ? structUnit : undefined,
-      brand: structBrand || undefined,
-      category: structCategory || undefined,
-      country: structCountry || undefined,
-      certifications: structCerts || undefined,
-    }
-    const hasAny = p.productName || p.quantity || p.brand || p.category || p.country || p.certifications
-    return hasAny ? p : undefined
-  }
+  // Initialized empty on mount — structured data is not restored from memory
+  // to avoid coupling the module to protocol changes; it is merged into the
+  // enhanced query string instead.
+  const [structProductName, setStructProductName] = useState('')
+  const [structQuantity, setStructQuantity] = useState('')
+  const [structUnit, setStructUnit] = useState('pcs')
+  const [structBrand, setStructBrand] = useState('')
+  const [structCategory, setStructCategory] = useState('')
+  const [structCountry, setStructCountry] = useState('')
+  const [structCerts, setStructCerts] = useState('')
 
   /** Append structured info to the NL query for backward compat / mock mode. */
   const buildEnhancedQuery = () => {
@@ -348,23 +313,17 @@ export function SourcingModule({
   }
 
   // Builds the memory record for the current query + all entered inputs.
+  // Structured form fields are merged into the query string (via buildEnhancedQuery)
+  // rather than saved as separate restore fields, keeping the protocol minimal.
   const buildRecord = (list: Supplier[]) => ({
     module: 'sourcing' as const,
     query: query.trim() || '(no text — browse all suppliers)',
     filters: buildFilterSummary(),
     restore: {
       query,
-      productName: structProductName || undefined,
-      quantity: structQuantity || undefined,
-      unit: structUnit !== 'pcs' ? structUnit : undefined,
-      brand: structBrand || undefined,
-      structuredCategory: structCategory || undefined,
-      structuredCountry: structCountry || undefined,
-      structuredCerts: structCerts || undefined,
     },
     resultCount: list.length,
     candidateNames: list.map((r) => r.name),
-    results: list as unknown as Record<string, unknown>[],
   })
 
   const pollSearchJob = async (jobId: string): Promise<SourcingJob> => {
@@ -382,7 +341,6 @@ export function SourcingModule({
   const handleAnalyze = async () => {
     console.log(`[SourcingModule] handleAnalyze STARTED`, { query: query.slice(0, 60) })
     const enhancedQuery = buildEnhancedQuery()
-    const structured = getStructuredPayload()
     setIsAnalyzing(true)
     setHasRun(false)
     setSearchStatus('running')
@@ -396,7 +354,8 @@ export function SourcingModule({
       if (apiEnabled) {
         try {
           // Preferred path: async job with live "Agent Thinking" progress (SSE).
-          const created = await api.sourcing.createJob(enhancedQuery, structured)
+          // Structured form fields are merged into enhancedQuery, so no second arg.
+          const created = await api.sourcing.createJob(enhancedQuery)
           setSearchJob(created)
           console.log(`[SourcingModule] Job created:`, created.jobId)
           let finished: SourcingJob
@@ -425,7 +384,7 @@ export function SourcingModule({
           // Backend has no job endpoints yet (older deploy → 404). Fall back to the
           // plain synchronous search so results still load (without live progress).
           setSearchJob(null)
-          const res = await api.sourcing.search(enhancedQuery, structured)
+          const res = await api.sourcing.search(enhancedQuery)
           list = res.results ?? []
           setResults(list)
           setSearchStatus(list.length > 0 ? 'success' : 'empty')
@@ -591,11 +550,6 @@ export function SourcingModule({
 
       {hasRun && (
         <section className="space-y-4">
-          {restore?.results && (
-            <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 shadow-sm">
-              🔁 {t.memory.restoredBanner}
-            </div>
-          )}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <h2 className="text-base font-semibold text-slate-900">
