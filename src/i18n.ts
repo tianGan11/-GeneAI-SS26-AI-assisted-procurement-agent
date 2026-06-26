@@ -61,6 +61,21 @@ export interface Translation {
     inputLabel: string
     placeholder: string
     hint: string
+    structuredLabel: string
+    structuredHint: string
+    productName: string
+    productNamePlaceholder: string
+    quantity: string
+    quantityPlaceholder: string
+    unit: string
+    brand: string
+    brandPlaceholder: string
+    structuredCategory: string
+    structuredCountry: string
+    countryPlaceholder: string
+    structuredCerts: string
+    certsPlaceholder: string
+    units: { pcs: string; kg: string; m: string; set: string }
     categoryLabel: string
     categoryAll: string
     categories: Record<SupplierCategoryKey, string>
@@ -142,6 +157,15 @@ export interface Translation {
     deleteTitle: string
     confirmDelete: string
     clearTitle: string
+    searchPlaceholder: string
+    timeFilterAll: string
+    timeFilter7d: string
+    timeFilter30d: string
+    timeFilter1y: string
+    moduleFilterAll: string
+    moduleSourcing: string
+    moduleComparison: string
+    restoredBanner: string
   }
 
   feedback: {
@@ -245,6 +269,21 @@ export const translations: Record<Language, Translation> = {
       placeholder:
         'Describe what you need, e.g.: water deflector strips and glass adhesive for windscreen assembly in Germany...',
       hint: 'Mention the part, material, region, volume and any certification needs.',
+      structuredLabel: 'Detailed requirements (optional — fills in automatically when you describe above)',
+      structuredHint: 'Fields you fill in here will take priority over the natural-language description.',
+      productName: 'Product name',
+      productNamePlaceholder: 'e.g. Rubber seal strip EPDM',
+      quantity: 'Quantity',
+      quantityPlaceholder: 'e.g. 500',
+      unit: 'Unit',
+      brand: 'Brand (optional)',
+      brandPlaceholder: 'e.g. Bosch, Henkel',
+      structuredCategory: 'Category',
+      structuredCountry: 'Target region',
+      countryPlaceholder: 'e.g. Germany',
+      structuredCerts: 'Certifications (optional)',
+      certsPlaceholder: 'e.g. DIN, ISO 9001',
+      units: { pcs: 'pcs', kg: 'kg', m: 'm', set: 'set' },
       categoryLabel: 'Category',
       categoryAll: 'All categories',
       categories: {
@@ -341,6 +380,15 @@ export const translations: Record<Language, Translation> = {
       deleteTitle: 'Delete record',
       confirmDelete: 'Delete this conversation? This cannot be undone.',
       clearTitle: 'Clear all records',
+      searchPlaceholder: 'Search by keyword, category, or product name…',
+      timeFilterAll: 'All time',
+      timeFilter7d: 'Last 7 days',
+      timeFilter30d: 'Last 30 days',
+      timeFilter1y: 'Last year',
+      moduleFilterAll: 'All',
+      moduleSourcing: 'Sourcing',
+      moduleComparison: 'Comparison',
+      restoredBanner: 'Restored from memory — previous results shown below',
     },
     feedback: {
       title: 'Share your feedback',
@@ -441,6 +489,21 @@ export const translations: Record<Language, Translation> = {
       inputLabel: '您要寻找什么供应商？',
       placeholder: '请描述需求，例如：用于挡风玻璃装配的挡水条与玻璃胶，区域德国……',
       hint: '可注明零件、材料、区域、用量及认证要求。',
+      structuredLabel: '详细需求（可选 — 填写后优先使用）',
+      structuredHint: '此处填写的字段会优先于自然语言描述中的内容。',
+      productName: '商品名称',
+      productNamePlaceholder: '例如：橡胶密封条 EPDM',
+      quantity: '数量',
+      quantityPlaceholder: '例如 500',
+      unit: '单位',
+      brand: '品牌（可选）',
+      brandPlaceholder: '例如：Bosch、Henkel',
+      structuredCategory: '品类',
+      structuredCountry: '目标地区',
+      countryPlaceholder: '例如：德国',
+      structuredCerts: '认证要求（可选）',
+      certsPlaceholder: '例如：DIN、ISO 9001',
+      units: { pcs: '个', kg: '千克', m: '米', set: '套' },
       categoryLabel: '品类',
       categoryAll: '全部品类',
       categories: {
@@ -535,6 +598,15 @@ export const translations: Record<Language, Translation> = {
       deleteTitle: '删除记录',
       confirmDelete: '确定删除该条对话记录吗？此操作不可撤销。',
       clearTitle: '清空全部记录',
+      searchPlaceholder: '按关键词、品类或产品名称搜索…',
+      timeFilterAll: '全部时间',
+      timeFilter7d: '近7天',
+      timeFilter30d: '近30天',
+      timeFilter1y: '近一年',
+      moduleFilterAll: '全部',
+      moduleSourcing: '寻找供应商',
+      moduleComparison: '标准品比价',
+      restoredBanner: '已从记忆恢复 — 下方显示上次的搜索结果',
     },
     feedback: {
       title: '分享您的反馈',

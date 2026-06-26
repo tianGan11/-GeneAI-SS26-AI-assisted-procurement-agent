@@ -226,27 +226,145 @@ export function SourcingModule({
   restore: ConversationRecord | null
 }) {
   const { remember, attachFeedback } = useMemory()
-  const [query, setQuery] = useState(restore?.restore?.query ?? '')
-  // Mock mode shows the seed suppliers immediately; API mode waits for a search.
-  const [results, setResults] = useState<Supplier[]>(apiEnabled ? [] : MOCK_SUPPLIERS)
-  const [currentStep, setCurrentStep] = useState(3)
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Debug logging — detects unexpected page reloads.
+  // ═══════════════════════════════════════════════════════════════════════════
+  useEffect(() => {
+    try {
+      const nav = performance.getEntriesByType?.('navigation')?.[0] as PerformanceNavigationTiming | undefined
+      console.log(`[SourcingModule] MOUNTED (type=${nav?.type ?? 'unknown'})`, {
+        restore: !!restore,
+      })
+    } catch {
+      console.log(`[SourcingModule] MOUNTED (perf API unavailable)`)
+    }
+  }, [])
+
+  // Cleanup any stale sessionStorage artifacts from previous versions.
+  useEffect(() => {
+    try {
+      ;['_sourcing_save', '_sourcing_save_v2', '_sourcing_reloading', '_sourcing_analyzing', '_sourcing_convId']
+        .forEach(k => sessionStorage.removeItem(k))
+    } catch { /* ignore */ }
+  }, [])
+
+  // ── State initializers ────────────────────────────────────────────────
+  // Every time this module mounts, it starts FRESH — no cache, no persistence.
+  // Only the `restore` prop (from Memory module → conversation history) can
+  // pre-fill state.
+
+  const savedResults = restore?.results as Supplier[] | undefined
+  const savedHasRun = !!savedResults
+
+  const [query, setQuery] = useState(
+    restore?.restore?.query ?? ''
+  )
+  const [results, setResults] = useState<Supplier[]>(
+    savedResults ?? (apiEnabled ? [] : MOCK_SUPPLIERS)
+  )
+  const [currentStep, setCurrentStep] = useState(
+    savedResults ? 3 : 0
+  )
   const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [hasRun, setHasRun] = useState(!apiEnabled)
-  const [searchStatus, setSearchStatus] = useState<SearchStatus>(apiEnabled ? 'idle' : 'success')
+  const [hasRun, setHasRun] = useState(
+    savedHasRun || !apiEnabled
+  )
+  const [searchStatus, setSearchStatus] = useState<SearchStatus>(
+    savedResults ? 'success'
+    : apiEnabled ? 'idle' : 'success'
+  )
   const [searchJob, setSearchJob] = useState<SourcingJob | null>(null)
   const [searchError, setSearchError] = useState(false)
   const [feedbackFor, setFeedbackFor] = useState<string | null>(null)
-  // Reopening a past conversation re-links feedback to that same record.
-  const [activeConversationId, setActiveConversationId] = useState<string | null>(restore?.id ?? null)
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(
+    restore?.id ?? null
+  )
+
+  // ── Structured fields state (双模输入表单) ──────────────────────────────
+  const sf = restore?.restore
+  const [structProductName, setStructProductName] = useState(
+    sf?.productName ?? ''
+  )
+  const [structQuantity, setStructQuantity] = useState(
+    sf?.quantity ?? ''
+  )
+  const [structUnit, setStructUnit] = useState(
+    sf?.unit ?? 'pcs'
+  )
+  const [structBrand, setStructBrand] = useState(
+    sf?.brand ?? ''
+  )
+  const [structCategory, setStructCategory] = useState(
+    sf?.structuredCategory ?? ''
+  )
+  const [structCountry, setStructCountry] = useState(
+    sf?.structuredCountry ?? ''
+  )
+  const [structCerts, setStructCerts] = useState(
+    sf?.structuredCerts ?? ''
+  )
+
+  /** Build the structured fields payload for the API. Returns undefined when empty. */
+  const getStructuredPayload = () => {
+    const p = {
+      productName: structProductName || undefined,
+      quantity: structQuantity || undefined,
+      unit: structUnit !== 'pcs' ? structUnit : undefined,
+      brand: structBrand || undefined,
+      category: structCategory || undefined,
+      country: structCountry || undefined,
+      certifications: structCerts || undefined,
+    }
+    const hasAny = p.productName || p.quantity || p.brand || p.category || p.country || p.certifications
+    return hasAny ? p : undefined
+  }
+
+  /** Append structured info to the NL query for backward compat / mock mode. */
+  const buildEnhancedQuery = () => {
+    if (!structProductName && !structQuantity && !structBrand && !structCategory && !structCountry && !structCerts)
+      return query
+    const parts: string[] = []
+    if (structProductName) parts.push(`Product: ${structProductName}`)
+    if (structQuantity) parts.push(`Quantity: ${structQuantity} ${structUnit}`)
+    if (structBrand) parts.push(`Brand: ${structBrand}`)
+    if (structCategory) parts.push(`Category: ${structCategory}`)
+    if (structCountry) parts.push(`Target Country: ${structCountry}`)
+    if (structCerts) parts.push(`Certifications: ${structCerts}`)
+    return `${query}\n---\n${parts.join('\n')}`
+  }
+
+  /** Human-readable filter summary for the memory card. */
+  const buildFilterSummary = (): Record<string, string> => {
+    const s: Record<string, string> = {}
+    const add = (k: string, v: string) => { if (v) s[k] = v }
+    add(t.sourcing.productName, structProductName)
+    if (structQuantity) add(t.sourcing.quantity, `${structQuantity} ${structUnit}`)
+    add(t.sourcing.brand, structBrand)
+    add(t.sourcing.structuredCategory, structCategory)
+    add(t.sourcing.structuredCountry, structCountry)
+    add(t.sourcing.structuredCerts, structCerts)
+    return s
+  }
 
   // Builds the memory record for the current query + all entered inputs.
   const buildRecord = (list: Supplier[]) => ({
     module: 'sourcing' as const,
     query: query.trim() || '(no text — browse all suppliers)',
-    filters: {},
-    restore: { query },
+    filters: buildFilterSummary(),
+    restore: {
+      query,
+      productName: structProductName || undefined,
+      quantity: structQuantity || undefined,
+      unit: structUnit !== 'pcs' ? structUnit : undefined,
+      brand: structBrand || undefined,
+      structuredCategory: structCategory || undefined,
+      structuredCountry: structCountry || undefined,
+      structuredCerts: structCerts || undefined,
+    },
     resultCount: list.length,
     candidateNames: list.map((r) => r.name),
+    results: list as unknown as Record<string, unknown>[],
   })
 
   const pollSearchJob = async (jobId: string): Promise<SourcingJob> => {
@@ -262,6 +380,9 @@ export function SourcingModule({
   }
 
   const handleAnalyze = async () => {
+    console.log(`[SourcingModule] handleAnalyze STARTED`, { query: query.slice(0, 60) })
+    const enhancedQuery = buildEnhancedQuery()
+    const structured = getStructuredPayload()
     setIsAnalyzing(true)
     setHasRun(false)
     setSearchStatus('running')
@@ -275,8 +396,9 @@ export function SourcingModule({
       if (apiEnabled) {
         try {
           // Preferred path: async job with live "Agent Thinking" progress (SSE).
-          const created = await api.sourcing.createJob(query)
+          const created = await api.sourcing.createJob(enhancedQuery, structured)
           setSearchJob(created)
+          console.log(`[SourcingModule] Job created:`, created.jobId)
           let finished: SourcingJob
           try {
             finished = await api.sourcing.streamJob(created.jobId, (job) => {
@@ -289,6 +411,7 @@ export function SourcingModule({
             // stable polling path as a fallback so the UX still progresses.
             finished = await pollSearchJob(created.jobId)
           }
+          console.log(`[SourcingModule] Job finished:`, { status: finished.status, results: finished.results?.length })
           list = finished.results ?? []
           if (finished.status === 'failed') {
             setResults(list)
@@ -302,7 +425,7 @@ export function SourcingModule({
           // Backend has no job endpoints yet (older deploy → 404). Fall back to the
           // plain synchronous search so results still load (without live progress).
           setSearchJob(null)
-          const res = await api.sourcing.search(query)
+          const res = await api.sourcing.search(enhancedQuery, structured)
           list = res.results ?? []
           setResults(list)
           setSearchStatus(list.length > 0 ? 'success' : 'empty')
@@ -315,9 +438,19 @@ export function SourcingModule({
         setSearchStatus('success')
       }
       setHasRun(true)
-      setActiveConversationId(await remember(buildRecord(list)))
-    } catch {
-      setResults([])
+      console.log(`[SourcingModule] Results set, saving to memory...`, { resultCount: list.length })
+      // Save to conversation memory independently — a failure here must NOT
+      // clear already-fetched results.
+      try {
+        const convId = await remember(buildRecord(list))
+        console.log(`[SourcingModule] remember() succeeded:`, convId)
+        setActiveConversationId(convId)
+      } catch (e) {
+        console.warn(`[SourcingModule] Failed to save conversation to memory; search results unaffected.`, e)
+      }
+      console.log(`[SourcingModule] handleAnalyze SUCCESS, hasRun=true`)
+    } catch (e) {
+      console.error(`[SourcingModule] handleAnalyze CATCH:`, e)
       setSearchError(true)
       setSearchStatus('error')
       setHasRun(true)
@@ -347,6 +480,104 @@ export function SourcingModule({
         />
         <p className="mt-1.5 text-xs text-slate-400">{t.sourcing.hint}</p>
 
+        {/* ── Structured form (双模输入) ───────────────────────────────── */}
+        <div className="mt-6 border-t border-slate-200 pt-6">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+            {t.sourcing.structuredLabel}
+          </p>
+          <p className="mb-4 mt-0.5 text-xs text-slate-400">{t.sourcing.structuredHint}</p>
+
+          <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
+            {/* Product Name */}
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">{t.sourcing.productName}</label>
+              <input
+                type="text"
+                value={structProductName}
+                onChange={(e) => setStructProductName(e.target.value)}
+                placeholder={t.sourcing.productNamePlaceholder}
+                className="w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
+
+            {/* Quantity + Unit */}
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">{t.sourcing.quantity}</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={structQuantity}
+                  onChange={(e) => setStructQuantity(e.target.value)}
+                  placeholder={t.sourcing.quantityPlaceholder}
+                  className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+                <select
+                  value={structUnit}
+                  onChange={(e) => setStructUnit(e.target.value)}
+                  className="w-20 rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                >
+                  <option value="pcs">{t.sourcing.units.pcs}</option>
+                  <option value="kg">{t.sourcing.units.kg}</option>
+                  <option value="m">{t.sourcing.units.m}</option>
+                  <option value="set">{t.sourcing.units.set}</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Brand */}
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">{t.sourcing.brand}</label>
+              <input
+                type="text"
+                value={structBrand}
+                onChange={(e) => setStructBrand(e.target.value)}
+                placeholder={t.sourcing.brandPlaceholder}
+                className="w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
+
+            {/* Category */}
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">{t.sourcing.structuredCategory}</label>
+              <select
+                value={structCategory}
+                onChange={(e) => setStructCategory(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              >
+                <option value="">{t.sourcing.categoryAll}</option>
+                {Object.entries(t.sourcing.categories).map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Country */}
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">{t.sourcing.structuredCountry}</label>
+              <input
+                type="text"
+                value={structCountry}
+                onChange={(e) => setStructCountry(e.target.value)}
+                placeholder={t.sourcing.countryPlaceholder}
+                className="w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
+
+            {/* Certifications */}
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">{t.sourcing.structuredCerts}</label>
+              <input
+                type="text"
+                value={structCerts}
+                onChange={(e) => setStructCerts(e.target.value)}
+                placeholder={t.sourcing.certsPlaceholder}
+                className="w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
+          </div>
+        </div>
+        {/* ── End structured form ────────────────────────────────────────── */}
+
         <div className="mt-4 flex justify-end">
           <AnalyzeButton isAnalyzing={isAnalyzing} onClick={handleAnalyze} t={t} />
         </div>
@@ -360,6 +591,11 @@ export function SourcingModule({
 
       {hasRun && (
         <section className="space-y-4">
+          {restore?.results && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 shadow-sm">
+              🔁 {t.memory.restoredBanner}
+            </div>
+          )}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <h2 className="text-base font-semibold text-slate-900">

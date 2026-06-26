@@ -113,7 +113,7 @@ class LLMRanker:
                 "For suppliers, candidates with source=database / repurchasePriority=database are existing database suppliers and should receive a modest repurchase preference when relevance is close; do not let this override a clearly much better new web supplier. "
                 f"Query: {query}\nCandidates: {payload}"
             )
-            structured_llm = self.llm.with_structured_output(RankingResponse)
+            structured_llm = self.llm.with_structured_output(RankingResponse, method="function_calling")
             response = await structured_llm.ainvoke(prompt)
             ranking = response if isinstance(response, RankingResponse) else RankingResponse.model_validate(response)
             return {item.id: item for item in ranking.results}
@@ -155,9 +155,14 @@ class LLMRanker:
 
     @staticmethod
     def _apply_repurchase_bonus(candidate: dict) -> int:
+        """Small bonus for known database suppliers when relevance is close.
+
+        Reduced from +12 to +3 so web-researched suppliers with genuinely higher
+        relevance can outrank marginal database hits.
+        """
         score = int(candidate.get("matchScore", 0))
         if candidate.get("source") == "database" or candidate.get("repurchasePriority") == "database":
-            score += 12
+            score += 3
         return max(0, min(100, score))
 
     @staticmethod
