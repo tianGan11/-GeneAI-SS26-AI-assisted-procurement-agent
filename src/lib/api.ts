@@ -150,6 +150,17 @@ export interface ComparisonFilters {
   deliveryTime?: DeliveryOptionKey
 }
 
+/** Structured fields for the sourcing module's form input. */
+export interface SourcingStructuredFields {
+  productName?: string
+  quantity?: string
+  unit?: string
+  brand?: string
+  category?: string
+  country?: string
+  certifications?: string
+}
+
 export interface SourcingJobEvent {
   timestamp: number
   phase: string
@@ -169,7 +180,14 @@ export interface SourcingJob {
 }
 
 /** New-conversation payload: a record without server-generated fields. */
-export type NewConversation = Omit<ConversationRecord, 'id' | 'timestamp' | 'feedback'>
+export type NewConversation = Omit<
+  ConversationRecord,
+  'id' | 'timestamp' | 'feedback'
+> & {
+  /** requestSnapshot and resultsSnapshot are optional; old records may lack them. */
+  requestSnapshot?: Record<string, unknown>
+  resultsSnapshot?: Record<string, unknown>[]
+}
 
 export const api = {
   auth: {
@@ -190,10 +208,10 @@ export const api = {
   },
 
   sourcing: {
-    search: (query: string) =>
-      request<{ results: Supplier[] }>('/api/sourcing/search', { method: 'POST', body: { query } }),
-    createJob: (query: string) =>
-      request<SourcingJob>('/api/sourcing/search-jobs', { method: 'POST', body: { query } }),
+    search: (query: string, structured?: SourcingStructuredFields) =>
+      request<{ results: Supplier[] }>('/api/sourcing/search', { method: 'POST', body: { query, structured } }),
+    createJob: (query: string, structured?: SourcingStructuredFields) =>
+      request<SourcingJob>('/api/sourcing/search-jobs', { method: 'POST', body: { query, structured } }),
     getJob: (jobId: string) => request<SourcingJob>(`/api/sourcing/search-jobs/${jobId}`),
     streamJob: (jobId: string, onEvent: (job: SourcingJob) => void) =>
       streamRequest<SourcingJob>(`/api/sourcing/search-jobs/${jobId}/events`, onEvent),
@@ -208,7 +226,8 @@ export const api = {
   },
 
   conversations: {
-    list: () => request<ConversationRecord[]>('/api/conversations'),
+    list: (range: string = '30d') =>
+      request<ConversationRecord[]>(`/api/conversations?range=${range}`),
     create: (record: NewConversation) =>
       request<ConversationRecord>('/api/conversations', { method: 'POST', body: record }),
     attachFeedback: (id: string, feedback: FeedbackRecord) =>

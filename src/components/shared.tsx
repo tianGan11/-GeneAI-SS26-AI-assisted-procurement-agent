@@ -141,7 +141,18 @@ export function ExportPrintToolbar({
   )
 }
 
-/** Shared "Start analysis" submit button with spinner. */
+/** Banner shown when results are restored from conversation history. */
+export function RestoredBanner({ t }: { t: Translation }) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 px-5 py-3 text-sm text-blue-800 shadow-sm print:hidden">
+      <svg className="h-5 w-5 shrink-0 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+      </svg>
+      <span className="font-medium">{t.memory.restoredBanner}</span>
+    </div>
+  )
+}
+
 export function AnalyzeButton({
   isAnalyzing,
   onClick,

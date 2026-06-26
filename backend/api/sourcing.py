@@ -19,6 +19,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from typing import Optional
 
 from api.auth import AuthUser, get_current_user
 
@@ -26,8 +27,19 @@ from api.auth import AuthUser, get_current_user
 router = APIRouter(prefix="/api/sourcing", tags=["sourcing"])
 
 
+class StructuredFields(BaseModel):
+    productName: Optional[str] = None
+    quantity: Optional[str] = None
+    unit: Optional[str] = None
+    brand: Optional[str] = None
+    category: Optional[str] = None
+    country: Optional[str] = None
+    certifications: Optional[str] = None
+
+
 class SearchRequest(BaseModel):
     query: str = Field(min_length=1)
+    structured: Optional[StructuredFields] = None
 
 
 class SearchJobEvent(BaseModel):
@@ -89,7 +101,7 @@ def _prune_jobs() -> None:
         _SEARCH_JOBS.pop(job_id, None)
 
 
-async def _run_search_job(job_id: str, query: str, agent: object) -> None:
+async def _run_search_job(job_id: str, query: str, agent: object, structured: Optional[dict] = None) -> None:
     job = _SEARCH_JOBS[job_id]
     job.status = "running"
     _append_event(job, "queued", "已接收供应商研究任务，Agent 正在启动采购需求分析流程...", 5)
@@ -98,7 +110,7 @@ async def _run_search_job(job_id: str, query: str, agent: object) -> None:
         _append_event(job, phase, message, percent)
 
     try:
-        result = await agent.search_suppliers(query, progress=progress)  # type: ignore[attr-defined]
+        result = await agent.search_suppliers(query, progress=progress, structured=structured)  # type: ignore[attr-defined]
         job.intent = result.get("intent")
         job.results = result.get("results", [])
         job.status = "completed"
@@ -151,7 +163,7 @@ async def search(
 
     Protected: requires Authorization: Bearer *** header.
     """
-    return await request.app.state.agent.search_suppliers(req.query)
+    return await request.app.state.agent.search_suppliers(req.query, structured=req.structured.model_dump() if req.structured else None)
 
 
 @router.post("/search-jobs", response_model=SearchJobResponse, status_code=status.HTTP_202_ACCEPTED)
@@ -176,7 +188,7 @@ async def create_search_job(
     )
     _append_event(job, "queued", "Queued supplier research job", 0)
     _SEARCH_JOBS[job_id] = job
-    asyncio.create_task(_run_search_job(job_id, req.query, request.app.state.agent))
+    asyncio.create_task(_run_search_job(job_id, req.query, request.app.state.agent, structured=req.structured.model_dump() if req.structured else None))
     return _public_job(job)
 
 

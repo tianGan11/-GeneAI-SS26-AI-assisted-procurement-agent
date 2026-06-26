@@ -29,8 +29,15 @@ __pycache__/
 backend/venv/
 backend/.env
 backend/chroma_data/
+backend/data/conversations/
 *.egg-info/
 
 # Env files (keep .env.example)
 .env
 backend/.env
+
+# Vite cache
+.vite/
+
+# External project reference data
+AW_*

@@ -1,10 +1,17 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { ConversationRecord, Language } from '../types'
 import type { Translation } from '../i18n'
 import { useMemory } from '../context/MemoryContext'
-import { MemoryIcon } from '../components/icons'
+import { apiEnabled } from '../lib/api'
+import { MemoryIcon, SearchIcon } from '../components/icons'
 import { StarRating } from '../components/StarRating'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+
+/** Time filter options. */
+type TimeFilter = 'all' | '7d' | '30d' | '1y'
+
+/** Module filter: 'all' shows both. */
+type ModuleFilter = 'all' | 'sourcing' | 'comparison'
 
 /** What a pending confirmation targets: one record (by id) or everything. */
 type PendingDelete = { type: 'one'; id: string } | { type: 'all' } | null
@@ -19,6 +26,21 @@ function formatTime(ts: number, language: Language): string {
   })
 }
 
+/** Return timestamp (ms) threshold for a given time filter, or 0 for 'all'. */
+function timeCutoff(filter: TimeFilter): number {
+  const now = Date.now()
+  switch (filter) {
+    case '7d':
+      return now - 7 * 24 * 60 * 60 * 1000
+    case '30d':
+      return now - 30 * 24 * 60 * 60 * 1000
+    case '1y':
+      return now - 365 * 24 * 60 * 60 * 1000
+    default:
+      return 0
+  }
+}
+
 export function MemoryModule({
   t,
   language,
@@ -29,9 +51,85 @@ export function MemoryModule({
   /** Reopen a past conversation in its source module. */
   onOpen: (conv: ConversationRecord) => void
 }) {
-  const { conversations, remove, clearAll } = useMemory()
+  const { conversations, remove, clearAll, reloadConvs } = useMemory()
   const m = t.memory
   const [pending, setPending] = useState<PendingDelete>(null)
+
+  // ── Filter state ──────────────────────────────────────────────────────
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>('all')
+  const [moduleFilter, setModuleFilter] = useState<ModuleFilter>('all')
+  const [keyword, setKeyword] = useState('')
+
+  // When the backend is enabled, re-fetch from the server when the time range changes.
+  useEffect(() => {
+    if (!apiEnabled) return
+    void reloadConvs(timeFilter === 'all' ? 'all' : timeFilter)
+  }, [timeFilter, reloadConvs])
+
+  // ── Client-side filtering (used in mock mode, or for keyword/module filter) ─
+  const filtered = useMemo(() => {
+    const cutoff = timeCutoff(timeFilter)
+    const kw = keyword.trim().toLowerCase()
+
+    return conversations.filter((conv) => {
+      // Time filter
+      if (cutoff > 0 && conv.timestamp < cutoff) return false
+
+      // Module filter
+      if (moduleFilter !== 'all' && conv.module !== moduleFilter) return false
+
+      // Keyword search (query text + filter values + candidate names)
+      if (kw) {
+        const haystack = [
+          conv.query,
+          ...Object.values(conv.filters),
+          ...(conv.candidateNames ?? []),
+          conv.module,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+        if (!haystack.includes(kw)) return false
+      }
+
+      return true
+    })
+  }, [conversations, timeFilter, moduleFilter, keyword])
+
+  // ── Filter button helper ──────────────────────────────────────────────
+  const timeBtn = (value: TimeFilter, label: string) => (
+    <button
+      key={value}
+      type="button"
+      onClick={() => setTimeFilter(value)}
+      className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+        timeFilter === value
+          ? 'bg-blue-600 text-white shadow-sm'
+          : 'border border-slate-200 bg-white text-slate-500 hover:border-blue-200 hover:text-blue-600'
+      }`}
+    >
+      {label}
+    </button>
+  )
+
+  const moduleBtn = (value: ModuleFilter, label: string) => (
+    <button
+      key={value}
+      type="button"
+      onClick={() => setModuleFilter(value)}
+      className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+        moduleFilter === value
+          ? value === 'sourcing'
+            ? 'bg-blue-600 text-white shadow-sm'
+            : value === 'comparison'
+              ? 'bg-violet-600 text-white shadow-sm'
+              : 'bg-slate-700 text-white shadow-sm'
+          : 'border border-slate-200 bg-white text-slate-500 hover:border-blue-200 hover:text-blue-600'
+      }`}
+    >
+      {label}
+    </button>
+  )
 
   const handleConfirm = () => {
     if (pending?.type === 'one') void remove(pending.id)
@@ -41,29 +139,70 @@ export function MemoryModule({
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-500">{m.openHint}</p>
+      {/* ── Filter bar ──────────────────────────────────────────────── */}
+      <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        {/* Keyword search */}
+        <div className="relative min-w-0 flex-1">
+          <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            placeholder={m.searchPlaceholder}
+            className="w-full rounded-lg border border-slate-200 bg-slate-50/50 py-2 pl-9 pr-3 text-sm text-slate-700 placeholder:text-slate-400 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          />
+        </div>
+
+        {/* Clear all button */}
         {conversations.length > 0 && (
           <button
             type="button"
             onClick={() => setPending({ type: 'all' })}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+            className="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
           >
             {m.clearAll}
           </button>
         )}
       </div>
 
-      {conversations.length === 0 ? (
+      {/* Time + module filter pills */}
+      <div className="flex flex-wrap items-center gap-3">
+        {/* Time filters */}
+        <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white p-1.5 shadow-sm">
+          {timeBtn('all', m.timeFilterAll)}
+          {timeBtn('7d', m.timeFilter7d)}
+          {timeBtn('30d', m.timeFilter30d)}
+          {timeBtn('1y', m.timeFilter1y)}
+        </div>
+
+        {/* Module filters */}
+        <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white p-1.5 shadow-sm">
+          {moduleBtn('all', m.moduleFilterAll)}
+          {moduleBtn('sourcing', m.moduleSourcing)}
+          {moduleBtn('comparison', m.moduleComparison)}
+        </div>
+
+        {/* Result count badge */}
+        <span className="text-xs text-slate-400">
+          {filtered.length}/{conversations.length}
+        </span>
+      </div>
+
+      {/* ── Conversation list ──────────────────────────────────────── */}
+      {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white p-16 text-center">
           <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-400">
             <MemoryIcon className="h-7 w-7" />
           </div>
-          <p className="max-w-md text-sm text-slate-500">{m.empty}</p>
+          <p className="max-w-md text-sm text-slate-500">
+            {keyword || timeFilter !== 'all' || moduleFilter !== 'all'
+              ? t.common.empty
+              : m.empty}
+          </p>
         </div>
       ) : (
         <div className="space-y-3">
-          {conversations.map((conv) => (
+          {filtered.map((conv) => (
             <div
               key={conv.id}
               role="button"

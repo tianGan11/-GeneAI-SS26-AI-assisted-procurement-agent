@@ -200,18 +200,18 @@ class SupplierRetriever:
         score = int(base_score)
         quality_prior = int(supplier.get("matchScore", 70))
         if intent.category and supplier.get("category") == intent.category:
-            score += 20
+            score += 8
         elif intent.category:
-            score -= 15
+            score -= 10
         if intent.country and intent.country != "Europe" and supplier.get("country") == intent.country:
-            score += 12
+            score += 5
         if intent.certifications:
             supplier_certs = {cert.upper() for cert in supplier.get("certifications", [])}
             if all(cert.upper() in supplier_certs for cert in intent.certifications):
-                score += 10
+                score += 5
             else:
-                score -= 8
-        score = round(score * 0.75 + quality_prior * 0.25)
+                score -= 5
+        score = round(score * 0.80 + quality_prior * 0.20)
         score = max(0, min(100, score))
         enriched = dict(supplier)
         enriched["matchScore"] = score
