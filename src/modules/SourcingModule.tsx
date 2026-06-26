@@ -7,7 +7,6 @@ import { useMemory } from '../context/MemoryContext'
 import { StepIndicator, ExportPrintToolbar, AnalyzeButton } from '../components/shared'
 import { FeedbackModal } from '../components/FeedbackModal'
 import { SearchIcon } from '../components/icons'
-import { RestoredBanner } from '../components/shared'
 
 function SupplierCard({
   supplier,
@@ -255,22 +254,17 @@ export function SourcingModule({
   // Only the `restore` prop (from Memory module → conversation history) can
   // pre-fill state.
 
-  // If restoring from a past conversation with saved results, restore them directly.
-  const savedResults = Array.isArray(restore?.resultsSnapshot)
-    ? (restore.resultsSnapshot as unknown as Supplier[])
-    : undefined
-
   const [query, setQuery] = useState(
     restore?.restore?.query ?? ''
   )
   const [results, setResults] = useState<Supplier[]>(
-    savedResults ?? (apiEnabled ? [] : MOCK_SUPPLIERS)
+    apiEnabled ? [] : MOCK_SUPPLIERS
   )
-  const [currentStep, setCurrentStep] = useState(savedResults ? 3 : 0)
+  const [currentStep, setCurrentStep] = useState(0)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [hasRun, setHasRun] = useState(!apiEnabled || !!savedResults)
+  const [hasRun, setHasRun] = useState(!apiEnabled)
   const [searchStatus, setSearchStatus] = useState<SearchStatus>(
-    savedResults ? 'success' : (apiEnabled ? 'idle' : 'success')
+    apiEnabled ? 'idle' : 'success'
   )
   const [searchJob, setSearchJob] = useState<SourcingJob | null>(null)
   const [searchError, setSearchError] = useState(false)
@@ -280,13 +274,16 @@ export function SourcingModule({
   )
 
   // ── Structured fields state (双模输入表单) ──────────────────────────────
-  const [structProductName, setStructProductName] = useState(restore?.restore?.productName ?? '')
-  const [structQuantity, setStructQuantity] = useState(restore?.restore?.quantity ?? '')
-  const [structUnit, setStructUnit] = useState(restore?.restore?.unit ?? 'pcs')
-  const [structBrand, setStructBrand] = useState(restore?.restore?.brand ?? '')
-  const [structCategory, setStructCategory] = useState(restore?.restore?.structuredCategory ?? '')
-  const [structCountry, setStructCountry] = useState(restore?.restore?.structuredCountry ?? '')
-  const [structCerts, setStructCerts] = useState(restore?.restore?.structuredCerts ?? '')
+  // Initialized empty on mount — structured data is not restored from memory
+  // to avoid coupling the module to protocol changes; it is merged into the
+  // enhanced query string instead.
+  const [structProductName, setStructProductName] = useState('')
+  const [structQuantity, setStructQuantity] = useState('')
+  const [structUnit, setStructUnit] = useState('pcs')
+  const [structBrand, setStructBrand] = useState('')
+  const [structCategory, setStructCategory] = useState('')
+  const [structCountry, setStructCountry] = useState('')
+  const [structCerts, setStructCerts] = useState('')
 
   /** Append structured info to the NL query for backward compat / mock mode. */
   const buildEnhancedQuery = () => {
@@ -315,37 +312,18 @@ export function SourcingModule({
     return s
   }
 
-  /** Build a full conversation record including request/results snapshots. */
-  const buildRecord = (list: Supplier[], enhancedQuery: string) => ({
+  // Builds the memory record for the current query + all entered inputs.
+  // Structured form fields are merged into the query string (via buildEnhancedQuery)
+  // rather than saved as separate restore fields, keeping the protocol minimal.
+  const buildRecord = (list: Supplier[]) => ({
     module: 'sourcing' as const,
     query: query.trim() || '(no text — browse all suppliers)',
     filters: buildFilterSummary(),
     restore: {
       query,
-      productName: structProductName || undefined,
-      quantity: structQuantity || undefined,
-      unit: structUnit !== 'pcs' || structQuantity ? structUnit : undefined,
-      brand: structBrand || undefined,
-      structuredCategory: structCategory || undefined,
-      structuredCountry: structCountry || undefined,
-      structuredCerts: structCerts || undefined,
-    },
-    requestSnapshot: {
-      query,
-      enhancedQuery,
-      structured: {
-        productName: structProductName,
-        quantity: structQuantity,
-        unit: structUnit,
-        brand: structBrand,
-        category: structCategory,
-        country: structCountry,
-        certifications: structCerts,
-      },
     },
     resultCount: list.length,
     candidateNames: list.map((r) => r.name),
-    resultsSnapshot: list as unknown as Record<string, unknown>[],
   })
 
   const pollSearchJob = async (jobId: string): Promise<SourcingJob> => {
@@ -423,7 +401,7 @@ export function SourcingModule({
       // Save to conversation memory independently — a failure here must NOT
       // clear already-fetched results.
       try {
-        const convId = await remember(buildRecord(list, enhancedQuery))
+        const convId = await remember(buildRecord(list))
         console.log(`[SourcingModule] remember() succeeded:`, convId)
         setActiveConversationId(convId)
       } catch (e) {
@@ -443,8 +421,7 @@ export function SourcingModule({
 
   const handleFeedbackSubmit = async (feedback: FeedbackRecord) => {
     // Lazily create a conversation if feedback is given before running analysis.
-    const enhancedQuery = buildEnhancedQuery()
-    const id = activeConversationId ?? (await remember(buildRecord(results, enhancedQuery)))
+    const id = activeConversationId ?? (await remember(buildRecord(results)))
     setActiveConversationId(id)
     await attachFeedback(id, feedback)
   }
@@ -573,7 +550,6 @@ export function SourcingModule({
 
       {hasRun && (
         <section className="space-y-4">
-          {!!restore?.resultsSnapshot && <RestoredBanner t={t} />}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <h2 className="text-base font-semibold text-slate-900">
