@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
 from api.auth import AuthUser, get_current_user
+from db_writer import save_comparison_request_and_products  # 新加的 import
 
 
 router = APIRouter(prefix="/api/comparison", tags=["comparison"])
@@ -37,9 +38,19 @@ async def search(
 
     Protected: requires Authorization: Bearer <token> header.
     """
-    return await request.app.state.agent.search_quotes(
+    result = await request.app.state.agent.search_quotes(
         req.query,
         min_price=req.minPrice,
         max_price=req.maxPrice,
         delivery_time=req.deliveryTime,
     )
+    # 自动把这次搜索结果存进数据库
+    try:
+        save_comparison_request_and_products(
+            request_text=req.query,
+            requested_by=current_user.email,
+            items=result.get("results", []),
+        )
+    except Exception as e:
+        print(f"[comparison] 保存数据库失败，不影响返回结果: {e}")
+    return result

@@ -21,7 +21,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from api.auth import AuthUser, get_current_user
-
+from db_writer import save_sourcing_request_and_suppliers
 
 router = APIRouter(prefix="/api/sourcing", tags=["sourcing"])
 
@@ -93,17 +93,26 @@ async def _run_search_job(job_id: str, query: str, agent: object) -> None:
     job = _SEARCH_JOBS[job_id]
     job.status = "running"
     _append_event(job, "queued", "已接收供应商研究任务，Agent 正在启动采购需求分析流程...", 5)
-
+ 
     def progress(phase: str, message: str, percent: int) -> None:
         _append_event(job, phase, message, percent)
-
+ 
     try:
-        result = await agent.search_suppliers(query, progress=progress)  # type: ignore[attr-defined]
+        result = await agent.search_suppliers(query, progress=progress)
         job.intent = result.get("intent")
         job.results = result.get("results", [])
         job.status = "completed"
         _append_event(job, "completed", "候选名单已准备就绪，可以开始查看结果了。", 100)
-    except Exception as exc:  # pragma: no cover - exact production errors vary
+        # 自动把这次搜索结果存进数据库
+        try:
+            save_sourcing_request_and_suppliers(
+                request_text=query,
+                requested_by=job.owner,  # job 里已经存了 owner（用户邮箱）
+                suppliers=job.results,
+            )
+        except Exception as e:
+            print(f"[sourcing] 保存数据库失败，不影响返回结果: {e}")
+    except Exception as exc:
         job.status = "failed"
         job.error = str(exc)
         _append_event(job, "failed", f"研究过程遇到了问题：{exc}。请尝试调整需求描述后重试。", max(job.progress, 5))
@@ -148,11 +157,19 @@ async def search(
 ):
     """
     POST /api/sourcing/search — match openapi.yaml spec.
-
     Protected: requires Authorization: Bearer *** header.
     """
-    return await request.app.state.agent.search_suppliers(req.query)
-
+    result = await request.app.state.agent.search_suppliers(req.query)
+    # 自动把这次搜索结果存进数据库
+    try:
+        save_sourcing_request_and_suppliers(
+            request_text=req.query,
+            requested_by=current_user.email,
+            suppliers=result.get("results", []),
+        )
+    except Exception as e:
+        print(f"[sourcing] 保存数据库失败，不影响返回结果: {e}")
+    return result
 
 @router.post("/search-jobs", response_model=SearchJobResponse, status_code=status.HTTP_202_ACCEPTED)
 async def create_search_job(
