@@ -10,7 +10,7 @@ import type {
 import { MOCK_COMPARISON } from '../data/comparison'
 import { api, apiEnabled } from '../lib/api'
 import { useMemory } from '../context/MemoryContext'
-import { StepIndicator, MatchScoreBadge, ExportPrintToolbar, AnalyzeButton } from '../components/shared'
+import { StepIndicator, MatchScoreBadge, ExportPrintToolbar, AnalyzeButton, RestoredBanner } from '../components/shared'
 import { FeedbackModal } from '../components/FeedbackModal'
 import { WeightControl } from '../components/WeightControl'
 
@@ -112,17 +112,24 @@ export function ComparisonModule({
   const { remember, attachFeedback } = useMemory()
   const init = restore?.restore
 
+  // If restoring from a past conversation with saved results, restore them directly.
+  const savedResults = Array.isArray(restore?.resultsSnapshot)
+    ? (restore.resultsSnapshot as unknown as ComparisonItem[])
+    : undefined
+
   const [requirement, setRequirement] = useState(init?.query ?? '')
   const [minPrice, setMinPrice] = useState(init?.minPrice ?? '')
   const [maxPrice, setMaxPrice] = useState(init?.maxPrice ?? '')
   const [deliveryTime, setDeliveryTime] = useState<DeliveryOptionKey>(init?.deliveryTime ?? 'unlimited')
   const [weights, setWeights] = useState<FactorWeights>(init?.weights ?? DEFAULT_WEIGHTS)
-  // Mock mode ranks the seed quotes immediately; API mode waits for a search.
-  const [items, setItems] = useState<ComparisonItem[]>(apiEnabled ? [] : MOCK_COMPARISON)
-  const [currentStep, setCurrentStep] = useState(3)
+  const [items, setItems] = useState<ComparisonItem[]>(
+    savedResults ?? (apiEnabled ? [] : MOCK_COMPARISON)
+  )
+  const [currentStep, setCurrentStep] = useState(savedResults ? 3 : 0)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [searchError, setSearchError] = useState(false)
   const [feedbackFor, setFeedbackFor] = useState<string | null>(null)
+  const [hasRun, setHasRun] = useState(!apiEnabled || !!savedResults)
   // Reopening a past conversation re-links feedback to that same record.
   const [activeConversationId, setActiveConversationId] = useState<string | null>(restore?.id ?? null)
 
@@ -134,7 +141,7 @@ export function ComparisonModule({
   // Top of the ranked list is the recommended pick.
   const recommendedId = rows.length > 0 ? rows[0].id : null
 
-  // Builds the memory record for the current query + all entered inputs.
+  /** Build a full conversation record including request/results snapshots. */
   const buildRecord = (ranked: ScoredItem[]) => ({
     module: 'comparison' as const,
     query: requirement.trim() || '(no text — filter browse)',
@@ -144,8 +151,16 @@ export function ComparisonModule({
       [c.weightTitle]: `${c.weightPrice} ${weights.price}% · ${c.weightDelivery} ${weights.delivery}% · ${c.weightRating} ${weights.rating}%`,
     },
     restore: { query: requirement, minPrice, maxPrice, deliveryTime, weights },
+    requestSnapshot: {
+      query: requirement,
+      minPrice,
+      maxPrice,
+      deliveryTime,
+      weights,
+    },
     resultCount: ranked.length,
     candidateNames: ranked.map((row) => row.vendor),
+    resultsSnapshot: ranked as unknown as Record<string, unknown>[],
   })
 
   const handleAnalyze = async () => {
@@ -175,15 +190,30 @@ export function ComparisonModule({
     }
 
     setIsAnalyzing(false)
+    setHasRun(true)
     const ranked = rankItems(list, { minPrice, maxPrice, deliveryTime, weights })
-    setActiveConversationId(await remember(buildRecord(ranked)))
+    try {
+      const convId = await remember(buildRecord(ranked))
+      setActiveConversationId(convId)
+    } catch (e) {
+      console.warn('[ComparisonModule] Failed to save conversation to memory; results unaffected.', e)
+    }
   }
 
   const handleFeedbackSubmit = async (feedback: FeedbackRecord) => {
     // Lazily create a conversation if feedback is given before running analysis.
-    const id = activeConversationId ?? (await remember(buildRecord(rows)))
-    setActiveConversationId(id)
-    await attachFeedback(id, feedback)
+    let id = activeConversationId
+    if (!id) {
+      try {
+        id = await remember(buildRecord(rows))
+        setActiveConversationId(id)
+      } catch { /* memory save is best-effort */ }
+    }
+    if (id) {
+      try { await attachFeedback(id, feedback) } catch (e) {
+        console.warn('[ComparisonModule] Failed to attach feedback; record unaffected.', e)
+      }
+    }
   }
 
   return (
@@ -247,8 +277,10 @@ export function ComparisonModule({
         <StepIndicator currentStep={currentStep} steps={t.steps} />
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm print:border-0 print:shadow-none">
-        <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      {hasRun && (
+        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm print:border-0 print:shadow-none">
+          {!!restore?.resultsSnapshot && <RestoredBanner t={t} />}
+          <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-base font-semibold text-slate-900">{c.tableTitle}</h2>
             <p className="mt-0.5 text-sm text-slate-500">{t.common.resultsFound(rows.length)}</p>
@@ -291,7 +323,8 @@ export function ComparisonModule({
         ) : (
           <ComparisonTable rows={rows} recommendedId={recommendedId} t={t} onSelect={(name) => setFeedbackFor(name)} />
         )}
-      </section>
+        </section>
+      )}
 
       {feedbackFor && (
         <FeedbackModal

@@ -116,6 +116,17 @@ export interface FeedbackRecord {
   submittedAt: number
 }
 
+/** Structured fields for the sourcing module (双模输入的表单部分). */
+export interface StructuredFields {
+  productName?: string
+  quantity?: string
+  unit?: string
+  brand?: string
+  category?: string
+  country?: string
+  certifications?: string
+}
+
 /** Raw input values needed to re-run / reopen a past conversation. */
 export interface ConversationRestore {
   query: string
@@ -123,6 +134,14 @@ export interface ConversationRestore {
   maxPrice?: string
   deliveryTime?: DeliveryOptionKey
   weights?: FactorWeights
+  /** Structured fields for sourcing module reopen. */
+  productName?: string
+  quantity?: string
+  unit?: string
+  brand?: string
+  structuredCategory?: string
+  structuredCountry?: string
+  structuredCerts?: string
 }
 
 /** One logged query + everything the user typed for it. */
@@ -134,6 +153,10 @@ export interface ConversationRecord {
   filters: Record<string, string>
   /** Raw input values so the conversation can be reopened in its module. */
   restore?: ConversationRestore
+  /** Snapshot of the full request payload sent to the backend. */
+  requestSnapshot?: Record<string, unknown>
+  /** Full search results for auto-restore on reopen (not truncated). */
+  resultsSnapshot?: Record<string, unknown>[]
   resultCount: number
   /** Names of the candidates returned, so feedback can reference them. */
   candidateNames: string[]

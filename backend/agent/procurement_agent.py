@@ -26,18 +26,44 @@ class ProcurementAgent:
         self.retriever = SupplierRetriever(chroma_collection, self.suppliers, llm=self.llm)
         self.ranker = LLMRanker(self.llm)
 
-    async def search_suppliers(self, query: str, progress=None) -> dict:
+    async def search_suppliers(self, query: str, progress=None, structured: dict | None = None) -> dict:
         """Full pipeline: parse → retrieve → rank → return.
 
         progress, when provided, is a lightweight callback used by the async
         job API to expose real backend phases to the frontend.
         Each progress call emits a freeform agent thought — the frontend
         prints them as-is without further phase-to-label mapping.
+
+        structured, when provided, contains B2B-procurement fields filled in via
+        the frontend's structured form (productName, quantity, category, country,
+        certifications, etc.).  These override the LLM-parsed intent values for a
+        more reliable double-check.
         """
         if progress:
             progress("parse", "正在解析您的采购需求，提取品类、地区、预算等关键信息...", 10)
 
         intent = await self.parser.parse(query)
+
+        # ── Apply structured form overrides (double-check) ─────────────
+        if structured:
+            if structured.get("category"):
+                intent.category = structured["category"]
+            if structured.get("country"):
+                intent.country = structured["country"]
+            if structured.get("certifications"):
+                certs = [c.strip().upper() for c in structured["certifications"].split(",")]
+                intent.certifications = list(dict.fromkeys([*certs, *intent.certifications]))
+            # Merge productName, quantity, brand into keywords for richer matching
+            sf_keywords = []
+            for sf_field in ["productName", "quantity", "brand"]:
+                val = structured.get(sf_field)
+                if val and val not in sf_keywords:
+                    sf_keywords.append(val)
+            if structured.get("unit"):
+                sf_keywords.append(structured["unit"])
+            if sf_keywords:
+                intent.keywords = list(dict.fromkeys([*sf_keywords, *intent.keywords]))
+
         category = intent.category or "general procurement"
         country = intent.country or "any target country"
         max_price = intent.max_price or 0
@@ -49,7 +75,7 @@ class ProcurementAgent:
         if progress:
             progress("retrieve", f"正在检索「{category}」相关的供应商资源，包括本地数据库和外部网页研究...", 45)
 
-        candidates = await self.retriever.search(intent, progress=progress)
+        candidates = await self.retriever.search(intent, query=query, progress=progress)
 
         if progress:
             progress("retrieve", f"已收集到 {len(candidates)} 个候选供应商，正在进行质量过滤和相关性匹配...", 70)

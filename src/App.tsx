@@ -11,6 +11,7 @@ import { SourcingModule } from './modules/SourcingModule'
 import { ComparisonModule } from './modules/ComparisonModule'
 import { MemoryModule } from './modules/MemoryModule'
 import { SettingsPage } from './modules/SettingsPage'
+import { ErrorBoundary } from './components/ErrorBoundary'
 
 function Workspace({
   language,
@@ -52,7 +53,17 @@ function Workspace({
         <Sidebar active={activeModule} onChange={goToModule} t={t} />
         <main className="min-w-0 flex-1 overflow-y-auto bg-slate-100 p-8 print:overflow-visible print:p-0">
           {activeModule === 'sourcing' && (
-            <SourcingModule t={t} restore={restore?.module === 'sourcing' ? restore : null} />
+            <ErrorBoundary
+              onError={() => console.error('[App] SourcingModule crashed')}
+              fallback={
+                <div className="rounded-xl border border-red-200 bg-red-50 p-12 text-center">
+                  <p className="text-sm font-medium text-red-700">Sourcing module encountered an error.</p>
+                  <p className="mt-1 text-xs text-red-500">Please switch to another tab and come back.</p>
+                </div>
+              }
+            >
+              <SourcingModule t={t} restore={restore?.module === 'sourcing' ? restore : null} />
+            </ErrorBoundary>
           )}
           {activeModule === 'comparison' && (
             <ComparisonModule t={t} restore={restore?.module === 'comparison' ? restore : null} />

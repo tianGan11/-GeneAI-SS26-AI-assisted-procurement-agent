@@ -13,6 +13,8 @@ interface MemoryContextValue {
   /** Deletes a single conversation by id. */
   remove: (conversationId: string) => Promise<void>
   clearAll: () => Promise<void>
+  /** Re-fetches conversations from the backend with a time‑range filter. */
+  reloadConvs: (range?: string) => Promise<void>
 }
 
 const MemoryContext = createContext<MemoryContextValue | null>(null)
@@ -102,9 +104,23 @@ export function MemoryProvider({ children }: { children: ReactNode }) {
     persist([])
   }, [persist])
 
+  /** Re-fetch conversations from the backend with an optional time-range filter. */
+  const reloadConvs = useCallback<MemoryContextValue['reloadConvs']>(
+    async (range) => {
+      if (!apiEnabled || !user) return
+      try {
+        const list = await api.conversations.list(range ?? '30d')
+        setConversations(list)
+      } catch {
+        /* ignore — previous list stays visible */
+      }
+    },
+    [user],
+  )
+
   const value = useMemo<MemoryContextValue>(
-    () => ({ conversations, remember, attachFeedback, remove, clearAll }),
-    [conversations, remember, attachFeedback, remove, clearAll],
+    () => ({ conversations, remember, attachFeedback, remove, clearAll, reloadConvs }),
+    [conversations, remember, attachFeedback, remove, clearAll, reloadConvs],
   )
 
   return <MemoryContext.Provider value={value}>{children}</MemoryContext.Provider>

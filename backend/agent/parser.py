@@ -98,7 +98,7 @@ class IntentParser:
 
         if self.llm is not None and hasattr(self.llm, "with_structured_output"):
             try:
-                structured_llm = self.llm.with_structured_output(ProcurementIntent)
+                structured_llm = self.llm.with_structured_output(ProcurementIntent, method="function_calling")
                 result = await structured_llm.ainvoke(prompt)
                 if isinstance(result, ProcurementIntent):
                     return self._merge_with_heuristics(query, result)
