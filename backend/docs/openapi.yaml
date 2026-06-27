@@ -29,6 +29,7 @@ security:
   - bearerAuth: []
 
 tags:
+  - name: Health
   - name: Auth
   - name: Vault
   - name: Sourcing
@@ -36,6 +37,21 @@ tags:
   - name: Conversations
 
 paths:
+  /api/health:
+    get:
+      tags: [Health]
+      summary: Backend health check
+      security: []
+      responses:
+        '200':
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+
   /api/auth/login:
     post:
       tags: [Auth]
@@ -128,12 +144,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [query]
-              properties:
-                query:
-                  type: string
-                  example: Water deflector strips and glass adhesive in Germany
+              $ref: '#/components/schemas/SourcingSearchRequest'
       responses:
         '200':
           description: Matching suppliers
@@ -147,6 +158,62 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Supplier'
+
+  /api/sourcing/search-jobs:
+    post:
+      tags: [Sourcing]
+      summary: Start an asynchronous supplier research job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SourcingSearchRequest'
+      responses:
+        '202':
+          description: Search job accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchJobResponse'
+
+  /api/sourcing/search-jobs/{job_id}:
+    get:
+      tags: [Sourcing]
+      summary: Poll an asynchronous supplier research job
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Current job state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchJobResponse'
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /api/sourcing/search-jobs/{job_id}/events:
+    get:
+      tags: [Sourcing]
+      summary: Stream supplier research job progress as Server-Sent Events
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Server-Sent Events containing SearchJobResponse payloads
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '404':
+          $ref: '#/components/responses/Error'
 
   /api/comparison/search:
     post:
@@ -176,10 +243,75 @@ paths:
                     items:
                       $ref: '#/components/schemas/ComparisonItem'
 
+  /api/comparison/search-jobs:
+    post:
+      tags: [Comparison]
+      summary: Start an asynchronous quote comparison job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ComparisonSearchRequest'
+      responses:
+        '202':
+          description: Quote comparison job accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComparisonJobResponse'
+
+  /api/comparison/search-jobs/{job_id}:
+    get:
+      tags: [Comparison]
+      summary: Poll an asynchronous quote comparison job
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Current comparison job state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComparisonJobResponse'
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /api/comparison/search-jobs/{job_id}/events:
+    get:
+      tags: [Comparison]
+      summary: Stream quote comparison job progress as Server-Sent Events
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Server-Sent Events containing ComparisonJobResponse payloads
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '404':
+          $ref: '#/components/responses/Error'
+
   /api/conversations:
     get:
       tags: [Conversations]
       summary: List the user's conversation memory (newest first)
+      parameters:
+        - name: range
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [7d, 30d, 1y, all]
+            default: 30d
+          description: Time range filter; all returns every saved conversation.
       responses:
         '200':
           description: Conversation records
@@ -334,9 +466,31 @@ components:
           type: string
           description: Plaintext secret — encrypt at rest, never return it
 
+    SourcingSearchRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+          example: Water deflector strips and glass adhesive in Germany
+        structured:
+          $ref: '#/components/schemas/SourcingStructuredFields'
+
+    SourcingStructuredFields:
+      type: object
+      description: Optional structured sourcing fields; they override/augment parsed intent.
+      properties:
+        productName: { type: string }
+        quantity: { type: string }
+        unit: { type: string }
+        brand: { type: string }
+        category: { type: string }
+        country: { type: string }
+        certifications: { type: string }
+
     SupplierCategory:
       type: string
-      enum: [waterDeflector, glassAdhesive, rubberSeal, glassRaw, hardware, packaging]
+      description: Open category string. Known examples include waterDeflector, glassAdhesive, rubberSeal, glassRaw, hardware, packaging, cleaning, office, safetyShoes, firstAid, equipment.
 
     Supplier:
       type: object
@@ -369,6 +523,63 @@ components:
           maximum: 100
           description: Relevance to the query (0–100)
 
+    SearchJobEvent:
+      type: object
+      required: [timestamp, phase, message, progress]
+      properties:
+        timestamp: { type: integer, format: int64, description: Epoch milliseconds }
+        phase: { type: string }
+        message: { type: string }
+        progress: { type: integer, minimum: 0, maximum: 100 }
+
+    SearchJobResponse:
+      type: object
+      required: [jobId, status, progress, step, events, results]
+      properties:
+        jobId: { type: string }
+        status:
+          type: string
+          enum: [queued, running, completed, failed]
+        progress: { type: integer, minimum: 0, maximum: 100 }
+        step: { type: string }
+        events:
+          type: array
+          items: { $ref: '#/components/schemas/SearchJobEvent' }
+        intent:
+          type: object
+          nullable: true
+          additionalProperties: true
+        results:
+          type: array
+          items: { $ref: '#/components/schemas/Supplier' }
+        error:
+          type: string
+          nullable: true
+
+    ComparisonJobResponse:
+      type: object
+      required: [jobId, status, progress, step, events, results]
+      properties:
+        jobId: { type: string }
+        status:
+          type: string
+          enum: [queued, running, completed, failed]
+        progress: { type: integer, minimum: 0, maximum: 100 }
+        step: { type: string }
+        events:
+          type: array
+          items: { $ref: '#/components/schemas/SearchJobEvent' }
+        intent:
+          type: object
+          nullable: true
+          additionalProperties: true
+        results:
+          type: array
+          items: { $ref: '#/components/schemas/ComparisonItem' }
+        error:
+          type: string
+          nullable: true
+
     PaymentTerm:
       type: string
       enum: [onAccount, prepayment, card]
@@ -386,7 +597,8 @@ components:
         matchScore: { type: number, minimum: 0, maximum: 100 }
         unitPriceEur:
           type: number
-          description: Numeric unit price in EUR (used for ranking)
+          nullable: true
+          description: Numeric unit price in EUR; null means manual price check needed
           example: 11.4
         unitLabel:
           type: string
@@ -394,7 +606,8 @@ components:
           example: '€ 11,40 / Kartusche'
         deliveryDays:
           type: integer
-          description: Numeric lead time in days (used for ranking)
+          nullable: true
+          description: Numeric lead time in days; null means manual delivery check needed
         deliveryLabel:
           type: string
           example: '3–5 Werktage'
@@ -405,6 +618,15 @@ components:
         deliveryMethod: { type: string }
         rating: { type: number, minimum: 0, maximum: 5 }
         reviews: { type: integer }
+        source: { type: string, enum: [database, web] }
+        sourceDetail: { type: string }
+        sourceUrls:
+          type: array
+          items: { type: string, format: uri }
+        evidenceSnippets:
+          type: array
+          items: { type: string }
+        priceConfidence: { type: string, enum: [extracted, unknown] }
 
     DeliveryOption:
       type: string
@@ -418,6 +640,7 @@ components:
         minPrice: { type: number, description: 'Optional hard filter (EUR)' }
         maxPrice: { type: number, description: 'Optional hard filter (EUR)' }
         deliveryTime: { $ref: '#/components/schemas/DeliveryOption' }
+        weights: { $ref: '#/components/schemas/FactorWeights' }
 
     FactorWeights:
       type: object
@@ -450,6 +673,13 @@ components:
         maxPrice: { type: string }
         deliveryTime: { $ref: '#/components/schemas/DeliveryOption' }
         weights: { $ref: '#/components/schemas/FactorWeights' }
+        productName: { type: string }
+        quantity: { type: string }
+        unit: { type: string }
+        brand: { type: string }
+        structuredCategory: { type: string }
+        structuredCountry: { type: string }
+        structuredCerts: { type: string }
 
     NewConversation:
       type: object
@@ -465,6 +695,14 @@ components:
           additionalProperties: { type: string }
           description: Human-readable filter summary for the memory list
         restore: { $ref: '#/components/schemas/ConversationRestore' }
+        requestSnapshot:
+          type: object
+          additionalProperties: true
+        resultsSnapshot:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
         resultCount: { type: integer }
         candidateNames:
           type: array

@@ -48,8 +48,9 @@ class LLMRanker:
         min_price: float = None,
         max_price: float = None,
         max_delivery_days: int = None,
+        weights: dict | None = None,
     ) -> list[dict]:
-        """Score quotes, apply hard filters, return sorted."""
+        """Score quotes, apply hard filters, and sort by the user's decision weights."""
         filtered = []
         for candidate in candidates:
             unit_price = candidate.get("unitPriceEur")
@@ -65,21 +66,31 @@ class LLMRanker:
         if not filtered:
             return []
 
-        llm_scores = await self._rank_with_llm(query, filtered, "quote")
+        normalized_weights = self._normalize_quote_weights(weights)
+        quote_stats = self._quote_normalization_stats(filtered)
+        llm_scores = await self._rank_with_llm(query, filtered, "quote", weights=normalized_weights)
         ranked = []
         for candidate in filtered:
             scored = dict(candidate)
+            weighted_score = self._quote_score(query, candidate, max_delivery_days, normalized_weights, quote_stats)
             llm_score = llm_scores.get(candidate.get("id"))
             if llm_score:
-                scored["matchScore"] = llm_score.matchScore
-                scored["reason"] = llm_score.reason
+                # Keep the LLM's semantic judgement, but make the slider weights materially affect ranking.
+                scored["matchScore"] = max(0, min(100, round(llm_score.matchScore * 0.55 + weighted_score * 0.45)))
+                scored["reason"] = f"{llm_score.reason} Weighted by price/delivery/rating preferences."
             else:
-                scored["matchScore"] = self._quote_score(query, candidate, max_delivery_days)
+                scored["matchScore"] = weighted_score
                 scored["reason"] = self._quote_reason(candidate)
             ranked.append(scored)
         return sorted(ranked, key=lambda item: item.get("matchScore", 0), reverse=True)
 
-    async def _rank_with_llm(self, query: str, candidates: list[dict], item_type: str) -> dict[str, RankedItem]:
+    async def _rank_with_llm(
+        self,
+        query: str,
+        candidates: list[dict],
+        item_type: str,
+        weights: dict | None = None,
+    ) -> dict[str, RankedItem]:
         if self.llm is None or not hasattr(self.llm, "with_structured_output"):
             return {}
         try:
@@ -111,6 +122,7 @@ class LLMRanker:
                 f"Rank these procurement {item_type} candidates for the query. "
                 "Return one result per candidate id with matchScore 0-100 and a concise reason. "
                 "For suppliers, candidates with source=database / repurchasePriority=database are existing database suppliers and should receive a modest repurchase preference when relevance is close; do not let this override a clearly much better new web supplier. "
+                f"For quote comparisons, respect these decision weights when provided: {weights}. "
                 f"Query: {query}\nCandidates: {payload}"
             )
             structured_llm = self.llm.with_structured_output(RankingResponse, method="function_calling")
@@ -139,19 +151,77 @@ class LLMRanker:
         base = int(candidate.get("matchScore", 70))
         return max(0, min(100, base + min(12, overlap * 2)))
 
-    def _quote_score(self, query: str, candidate: dict, max_delivery_days: Optional[int]) -> int:
-        score = self._heuristic_score(query, candidate)
+    def _quote_score(
+        self,
+        query: str,
+        candidate: dict,
+        max_delivery_days: Optional[int],
+        weights: dict | None = None,
+        stats: dict | None = None,
+    ) -> int:
+        relevance = self._heuristic_score(query, candidate)
         price = float(candidate.get("unitPriceEur") or 0)
         delivery_days = int(candidate.get("deliveryDays") or 99)
         rating = float(candidate.get("rating") or 0)
-        if price:
-            score += max(0, 8 - int(price))
-        if max_delivery_days and delivery_days <= max_delivery_days:
-            score += 8
+        weights = self._normalize_quote_weights(weights)
+        stats = stats or self._quote_normalization_stats([candidate])
+
+        min_price = stats["min_price"]
+        max_price = stats["max_price"]
+        if price and max_price > min_price:
+            price_score = 100 - ((price - min_price) / (max_price - min_price) * 100)
+        elif price:
+            price_score = 85
+        else:
+            price_score = 45
+
+        min_delivery = stats["min_delivery"]
+        max_delivery = stats["max_delivery"]
+        if delivery_days and max_delivery > min_delivery:
+            delivery_score = 100 - ((delivery_days - min_delivery) / (max_delivery - min_delivery) * 100)
         elif delivery_days <= 3:
-            score += 5
-        score += round(max(0, rating - 4.0) * 5)
-        return max(0, min(100, score))
+            delivery_score = 90
+        elif max_delivery_days and delivery_days <= max_delivery_days:
+            delivery_score = 78
+        else:
+            delivery_score = 50
+
+        rating_score = max(0, min(100, (rating / 5.0) * 100)) if rating else 45
+        decision_score = (
+            price_score * weights["price"]
+            + delivery_score * weights["delivery"]
+            + rating_score * weights["rating"]
+        ) / 100
+
+        # Keep some semantic query relevance so an off-topic cheap item cannot dominate completely.
+        score = relevance * 0.35 + decision_score * 0.65
+        return max(0, min(100, round(score)))
+
+    @staticmethod
+    def _normalize_quote_weights(weights: dict | None) -> dict[str, float]:
+        raw = weights or {}
+        price = max(0.0, float(raw.get("price", 40) or 0))
+        delivery = max(0.0, float(raw.get("delivery", 35) or 0))
+        rating = max(0.0, float(raw.get("rating", 25) or 0))
+        total = price + delivery + rating
+        if total <= 0:
+            return {"price": 40.0, "delivery": 35.0, "rating": 25.0}
+        return {
+            "price": price / total * 100,
+            "delivery": delivery / total * 100,
+            "rating": rating / total * 100,
+        }
+
+    @staticmethod
+    def _quote_normalization_stats(candidates: list[dict]) -> dict[str, float]:
+        prices = [float(item.get("unitPriceEur")) for item in candidates if item.get("unitPriceEur") is not None]
+        deliveries = [float(item.get("deliveryDays")) for item in candidates if item.get("deliveryDays") is not None]
+        return {
+            "min_price": min(prices) if prices else 0.0,
+            "max_price": max(prices) if prices else 0.0,
+            "min_delivery": min(deliveries) if deliveries else 0.0,
+            "max_delivery": max(deliveries) if deliveries else 0.0,
+        }
 
     @staticmethod
     def _apply_repurchase_bonus(candidate: dict) -> int:

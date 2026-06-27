@@ -33,12 +33,21 @@ class SupplierRetriever:
           5. Merge local + web results, cap at top_k (no padding to 10).
         """
         query_str = self._intent_to_query(intent)
+        # Important order: local database is searched first, then web research supplements it.
         all_local = self._search_local(query_str, intent, top_k=len(self.suppliers))
         qualified = [s for s in all_local if s.get("matchScore", 0) >= 60]
+        if progress:
+            progress(
+                "retrieve",
+                f"本地数据库已检索完成：找到 {len(all_local)} 条本地候选，其中 {len(qualified)} 条相关度较高；现在继续联网补充最新供应商。",
+                30,
+            )
 
         # ALWAYS run web search to supplement local results with fresh/current data.
         # Previously we short-circuited when >=10 local suppliers qualified, which
         # caused equipment searches to skip web search entirely → fast but low match quality.
+        if progress:
+            progress("web", "正在进行网络搜索，补充本地数据库之外的新供应商来源...", 36)
         web_results = await self._web_search(intent, progress=progress)
 
         # <5 web results → LLM rephrase & re-search with alt queries

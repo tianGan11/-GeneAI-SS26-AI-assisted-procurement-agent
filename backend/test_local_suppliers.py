@@ -12,18 +12,21 @@
   - 是否会触发网络搜索（≥60分=不触发，直接返回本地数据）
 """
 
-import os, re, math, json
+import os, sys, re, math, json
 from collections import Counter
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
+if any("pytest" in arg for arg in sys.argv):
+    import pytest
+    pytest.skip("local database smoke script; requires DATABASE_URL and is not part of automated tests", allow_module_level=True)
+
 # ============================================================
 # 配置
 # ============================================================
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://postgres.nhiiifzjdavawgnmfsmr:genai9group18@aws-1-eu-central-1.pooler.supabase.com:5432/postgres"
-)
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is required. Set it in your environment or backend/.env; never hard-code database credentials.")
 
 # ============================================================
 # 完全复刻 backend 代码逻辑 (database.py + retriever.py)

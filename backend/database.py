@@ -134,21 +134,26 @@ async def query_products(
         results = []
         for row in rows:
             attrs = row.get("quote_attrs") or {}
+            price = row.get("price")
+            delivery_days = row.get("lead_time_days")
             results.append({
                 "id": str(row["id"]),
                 "vendor": row["vendor_name"] or "Unknown",
                 "platform": attrs.get("platform", ""),
                 "product": row["product_name"] or row["listing_title"] or "",
                 "matchScore": int(float(row["score"]) * 20) if row["score"] else 70,
-                "unitPriceEur": float(row["price"]) if row["price"] else 0.0,
-                "unitLabel": f"€ {row['price']}" if row["price"] else "",
-                "deliveryDays": row["lead_time_days"] or 0,
-                "deliveryLabel": row["lead_time_text"] or "",
+                "unitPriceEur": float(price) if price not in (None, "") else None,
+                "unitLabel": f"€ {price}" if price not in (None, "") else "需人工核价",
+                "deliveryDays": int(delivery_days) if delivery_days not in (None, "") else None,
+                "deliveryLabel": row["lead_time_text"] or "需确认交期",
                 "paymentTerm": attrs.get("paymentTerm", "onAccount"),
                 "paymentLabel": attrs.get("paymentLabel", ""),
                 "deliveryMethod": attrs.get("deliveryMethod", ""),
                 "rating": float(row["score"]) if row["score"] else 0.0,
                 "reviews": attrs.get("reviews", 0),
+                "source": attrs.get("source", "database"),
+                "sourceDetail": attrs.get("sourceDetail", "database"),
+                "priceConfidence": "extracted" if price not in (None, "") else "unknown",
             })
         return results
     finally:
@@ -224,22 +229,27 @@ def query_products_sync() -> list[dict]:
         results = []
         for row in rows:
             attrs = row.get("quote_attrs") or {}
+            price = row.get("price")
+            delivery_days = row.get("lead_time_days")
             results.append({
                 "id": str(row["id"]),
                 "vendor": row["vendor_name"] or "Unknown",
                 "platform": attrs.get("platform", ""),
                 "product": row["product_name"] or row["listing_title"] or "",
                 "matchScore": int(float(row["score"]) * 20) if row["score"] else 70,
-                "unitPriceEur": float(row["price"]) if row["price"] else 0.0,
-                "unitLabel": f"€ {row['price']}" if row["price"] else "",
-                "deliveryDays": row["lead_time_days"] or 0,
-                "deliveryLabel": row["lead_time_text"] or "",
+                "unitPriceEur": float(price) if price not in (None, "") else None,
+                "unitLabel": f"€ {price}" if price not in (None, "") else "需人工核价",
+                "deliveryDays": int(delivery_days) if delivery_days not in (None, "") else None,
+                "deliveryLabel": row["lead_time_text"] or "需确认交期",
                 "paymentTerm": attrs.get("paymentTerm", "onAccount"),
                 "paymentLabel": attrs.get("paymentLabel", ""),
                 "deliveryMethod": attrs.get("deliveryMethod", ""),
                 "rating": float(row["score"]) if row["score"] else 0.0,
                 "reviews": attrs.get("reviews", 0),
                 "category": attrs.get("category", ""),
+                "source": attrs.get("source", "database"),
+                "sourceDetail": attrs.get("sourceDetail", "database"),
+                "priceConfidence": "extracted" if price not in (None, "") else "unknown",
             })
         return results
     finally:

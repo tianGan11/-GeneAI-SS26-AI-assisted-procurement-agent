@@ -10,17 +10,20 @@
   parser 解析 intent → 按 category 过滤 → ranker 排序
 """
 
-import os, math, re
+import os, sys, math, re
 from collections import Counter
 from typing import Optional
 
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://postgres.nhiiifzjdavawgnmfsmr:genai9group18@aws-1-eu-central-1.pooler.supabase.com:5432/postgres"
-)
+if any("pytest" in arg for arg in sys.argv):
+    import pytest
+    pytest.skip("local database smoke script; requires DATABASE_URL and is not part of automated tests", allow_module_level=True)
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is required. Set it in your environment or backend/.env; never hard-code database credentials.")
 
 
 def load_quotes() -> list[dict]:

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Translation } from '../i18n'
 import type {
   ComparisonItem,
@@ -8,9 +8,9 @@ import type {
   FeedbackRecord,
 } from '../types'
 import { MOCK_COMPARISON } from '../data/comparison'
-import { api, apiEnabled } from '../lib/api'
+import { api, apiEnabled, type ComparisonJob } from '../lib/api'
 import { useMemory } from '../context/MemoryContext'
-import { StepIndicator, MatchScoreBadge, ExportPrintToolbar, AnalyzeButton } from '../components/shared'
+import { StepIndicator, MatchScoreBadge, ExportPrintToolbar, AnalyzeButton, RestoredBanner } from '../components/shared'
 import { FeedbackModal } from '../components/FeedbackModal'
 import { WeightControl } from '../components/WeightControl'
 
@@ -27,6 +27,103 @@ interface RankOptions {
   maxPrice: string
   deliveryTime: DeliveryOptionKey
   weights: FactorWeights
+}
+
+type SearchStatus = 'idle' | 'running' | 'success' | 'empty' | 'error'
+
+function AgentProgressPanel({ job, t }: { job: ComparisonJob | null; t: Translation }) {
+  const copy = t.comparison.agentProgress
+  const backendProgress = job?.progress ?? 0
+  const [displayedProgress, setDisplayedProgress] = useState(0)
+  const events = job?.events ?? []
+  const isRunning = job?.status !== 'failed' && job?.status !== 'completed'
+  const progress = Math.round(displayedProgress)
+  const statusLabel = job?.status === 'failed' ? copy.failedTitle : copy.runningTitle
+  const eventListRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!job) return
+    const timer = window.setInterval(() => {
+      setDisplayedProgress((prev) => {
+        if (job.status === 'completed') return Math.min(100, prev + 4)
+        if (job.status === 'failed') return Math.max(prev, backendProgress)
+        return Math.min(92, prev + 0.28)
+      })
+    }, 200)
+    return () => window.clearInterval(timer)
+  }, [backendProgress, job])
+
+  useEffect(() => {
+    const list = eventListRef.current
+    if (!list) return
+    list.scrollTo({ top: list.scrollHeight, behavior: 'smooth' })
+  }, [events.length, job?.status])
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-blue-100 bg-gradient-to-br from-white via-blue-50/70 to-indigo-50/60 shadow-sm print:hidden">
+      <div className="border-b border-white/70 px-6 py-5 backdrop-blur">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-sm font-bold text-white shadow-lg shadow-blue-200">
+              {isRunning ? (
+                <span className="relative flex h-5 w-5 items-center justify-center" aria-label="Agent is working">
+                  <span className="absolute h-5 w-5 animate-ping rounded-full bg-white/50" />
+                  <span className="h-3 w-3 animate-pulse rounded-full bg-white" />
+                </span>
+              ) : (
+                'AI'
+              )}
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-500">{copy.eyebrow}</p>
+              <h2 className="mt-1 text-lg font-semibold text-slate-950">{statusLabel}</h2>
+              {isRunning && (
+                <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-blue-100/80 px-2.5 py-1 text-xs font-semibold text-blue-700 ring-1 ring-blue-200">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-500 opacity-60" />
+                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-blue-600" />
+                  </span>
+                  {copy.activeLabel}
+                </div>
+              )}
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">{copy.description}</p>
+            </div>
+          </div>
+          <div className="rounded-2xl bg-white/85 px-4 py-3 text-right shadow-sm ring-1 ring-blue-100">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{copy.progress}</p>
+            <p className="text-2xl font-semibold text-blue-700">{progress}%</p>
+          </div>
+        </div>
+
+        <div className="mt-5 h-2 overflow-hidden rounded-full bg-white ring-1 ring-blue-100">
+          <div className="relative h-full overflow-hidden rounded-full bg-blue-600 transition-[width] duration-700 ease-out" style={{ width: `${progress}%` }}>
+            {isRunning && <span className="absolute inset-0 animate-pulse bg-white/30" />}
+          </div>
+        </div>
+      </div>
+
+      <div className="p-5">
+        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{copy.thoughtLogLabel}</p>
+        <div ref={eventListRef} className="mt-3 max-h-64 space-y-2.5 overflow-auto pr-1">
+          {events.length === 0 ? (
+            <p className="text-sm leading-6 text-slate-500 italic">{copy.emptyText}</p>
+          ) : (
+            events.map((event) => (
+              <div
+                key={`${event.timestamp}-${event.phase}-${event.message}`}
+                className="flex items-start gap-2.5 rounded-xl bg-white/80 px-3.5 py-2.5 shadow-sm ring-1 ring-inset ring-blue-100"
+              >
+                <span className="mt-0.5 text-xs text-slate-400 tabular-nums">
+                  {new Date(event.timestamp).toLocaleTimeString()}
+                </span>
+                <p className="text-sm leading-6 text-slate-700">{event.message}</p>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </section>
+  )
 }
 
 /** Normalize a value to 0–1; higher is always better. */
@@ -46,18 +143,20 @@ function rankItems(items: ComparisonItem[], { minPrice, maxPrice, deliveryTime, 
   const max = maxPrice ? Number(maxPrice) : Infinity
   const deliveryCap = deliveryTime === 'within3' ? 3 : deliveryTime === 'within7' ? 7 : Infinity
 
-  const filtered = items.filter(
-    (r) => r.unitPriceEur >= min && r.unitPriceEur <= max && r.deliveryDays <= deliveryCap,
-  )
+  const filtered = items.filter((r) => {
+    const priceOk = r.unitPriceEur == null || (r.unitPriceEur >= min && r.unitPriceEur <= max)
+    const deliveryOk = r.deliveryDays == null || r.deliveryDays <= deliveryCap
+    return priceOk && deliveryOk
+  })
   if (filtered.length === 0) return []
 
-  const prices = filtered.map((r) => r.unitPriceEur)
-  const days = filtered.map((r) => r.deliveryDays)
+  const knownPrices = filtered.map((r) => r.unitPriceEur).filter((price): price is number => price != null)
+  const knownDays = filtered.map((r) => r.deliveryDays).filter((days): days is number => days != null)
   const ratings = filtered.map((r) => r.rating)
-  const minP = Math.min(...prices)
-  const maxP = Math.max(...prices)
-  const minD = Math.min(...days)
-  const maxD = Math.max(...days)
+  const minP = knownPrices.length ? Math.min(...knownPrices) : 0
+  const maxP = knownPrices.length ? Math.max(...knownPrices) : 0
+  const minD = knownDays.length ? Math.min(...knownDays) : 0
+  const maxD = knownDays.length ? Math.max(...knownDays) : 0
   const minR = Math.min(...ratings)
   const maxR = Math.max(...ratings)
 
@@ -67,13 +166,14 @@ function rankItems(items: ComparisonItem[], { minPrice, maxPrice, deliveryTime, 
 
   return filtered
     .map<ScoredItem>((r) => {
-      const sPrice = normalize(r.unitPriceEur, minP, maxP, false)
-      const sDelivery = normalize(r.deliveryDays, minD, maxD, false)
+      const sPrice = r.unitPriceEur == null ? 0.15 : normalize(r.unitPriceEur, minP, maxP, false)
+      const sDelivery = r.deliveryDays == null ? 0.2 : normalize(r.deliveryDays, minD, maxD, false)
       const sRating = normalize(r.rating, minR, maxR, true)
-      const score = Math.round((wp * sPrice + wd * sDelivery + wr * sRating) * 100)
+      const sourcePenalty = r.source === 'web' && (r.unitPriceEur == null || r.deliveryDays == null) ? 8 : 0
+      const score = Math.max(0, Math.round((wp * sPrice + wd * sDelivery + wr * sRating) * 100) - sourcePenalty)
       return { ...r, score }
     })
-    .sort((a, b) => b.score - a.score || a.unitPriceEur - b.unitPriceEur)
+    .sort((a, b) => b.score - a.score || (a.unitPriceEur ?? Number.POSITIVE_INFINITY) - (b.unitPriceEur ?? Number.POSITIVE_INFINITY))
 }
 
 function PriceInput({
@@ -111,15 +211,22 @@ export function ComparisonModule({
   const c = t.comparison
   const { remember, attachFeedback } = useMemory()
   const init = restore?.restore
+  const restoredResults = Array.isArray(restore?.resultsSnapshot)
+    ? (restore.resultsSnapshot as unknown as ComparisonItem[])
+    : undefined
 
   const [requirement, setRequirement] = useState(init?.query ?? '')
   const [minPrice, setMinPrice] = useState(init?.minPrice ?? '')
   const [maxPrice, setMaxPrice] = useState(init?.maxPrice ?? '')
   const [deliveryTime, setDeliveryTime] = useState<DeliveryOptionKey>(init?.deliveryTime ?? 'unlimited')
   const [weights, setWeights] = useState<FactorWeights>(init?.weights ?? DEFAULT_WEIGHTS)
-  const [items, setItems] = useState<ComparisonItem[]>(apiEnabled ? [] : MOCK_COMPARISON)
-  const [currentStep, setCurrentStep] = useState(0)
+  const [items, setItems] = useState<ComparisonItem[]>(restoredResults ?? (apiEnabled ? [] : MOCK_COMPARISON))
+  const [currentStep, setCurrentStep] = useState(restoredResults || !apiEnabled ? 3 : 0)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [searchStatus, setSearchStatus] = useState<SearchStatus>(
+    restoredResults ? 'success' : apiEnabled ? 'idle' : 'success',
+  )
+  const [comparisonJob, setComparisonJob] = useState<ComparisonJob | null>(null)
   const [searchError, setSearchError] = useState(false)
   const [feedbackFor, setFeedbackFor] = useState<string | null>(null)
   // Reopening a past conversation re-links feedback to that same record.
@@ -143,39 +250,87 @@ export function ComparisonModule({
       [c.weightTitle]: `${c.weightPrice} ${weights.price}% · ${c.weightDelivery} ${weights.delivery}% · ${c.weightRating} ${weights.rating}%`,
     },
     restore: { query: requirement, minPrice, maxPrice, deliveryTime, weights },
+    requestSnapshot: { query: requirement, minPrice, maxPrice, deliveryTime, weights },
     resultCount: ranked.length,
     candidateNames: ranked.map((row) => row.vendor),
+    resultsSnapshot: ranked as unknown as Record<string, unknown>[],
   })
+
+  const pollComparisonJob = async (jobId: string): Promise<ComparisonJob> => {
+    for (;;) {
+      await new Promise((resolve) => setTimeout(resolve, 1500))
+      const job = await api.comparison.getJob(jobId)
+      setComparisonJob(job)
+      if (job.progress >= 35 && job.progress < 75) setCurrentStep(2)
+      if (job.progress >= 75) setCurrentStep(3)
+      if (job.status === 'completed' || job.status === 'failed') return job
+    }
+  }
 
   const handleAnalyze = async () => {
     setIsAnalyzing(true)
     setCurrentStep(1)
-    setTimeout(() => setCurrentStep(2), 700)
-    setTimeout(() => setCurrentStep(3), 1400)
+    setSearchStatus('running')
+    setComparisonJob(null)
+    setSearchError(false)
 
-    let list = items
-    if (apiEnabled) {
-      setSearchError(false)
-      try {
-        const res = await api.comparison.search(requirement, {
-          minPrice: minPrice ? Number(minPrice) : undefined,
-          maxPrice: maxPrice ? Number(maxPrice) : undefined,
-          deliveryTime,
-        })
-        list = res.results
-      } catch {
-        list = []
-        setSearchError(true)
-      }
-      setItems(list)
-    } else {
-      // Keep the step animation visible in mock mode.
-      await new Promise((r) => setTimeout(r, 1800))
+    const filters = {
+      minPrice: minPrice ? Number(minPrice) : undefined,
+      maxPrice: maxPrice ? Number(maxPrice) : undefined,
+      deliveryTime,
     }
 
-    setIsAnalyzing(false)
-    const ranked = rankItems(list, { minPrice, maxPrice, deliveryTime, weights })
-    setActiveConversationId(await remember(buildRecord(ranked)))
+    let list = items
+    try {
+      if (apiEnabled) {
+        try {
+          const created = await api.comparison.createJob(requirement, filters, weights)
+          setComparisonJob(created)
+          let finished: ComparisonJob
+          try {
+            finished = await api.comparison.streamJob(created.jobId, (job) => {
+              setComparisonJob(job)
+              if (job.progress >= 35 && job.progress < 75) setCurrentStep(2)
+              if (job.progress >= 75) setCurrentStep(3)
+            })
+          } catch {
+            finished = await pollComparisonJob(created.jobId)
+          }
+          list = finished.results ?? []
+          if (finished.status === 'failed') {
+            setSearchError(true)
+            setSearchStatus('error')
+          } else {
+            setSearchStatus(list.length > 0 ? 'success' : 'empty')
+          }
+        } catch {
+          setComparisonJob(null)
+          const res = await api.comparison.search(requirement, filters)
+          list = res.results
+          setSearchStatus(list.length > 0 ? 'success' : 'empty')
+        }
+        setItems(list)
+      } else {
+        await new Promise((r) => setTimeout(r, 1800))
+        setSearchStatus('success')
+      }
+
+      const ranked = rankItems(list, { minPrice, maxPrice, deliveryTime, weights })
+      try {
+        setActiveConversationId(await remember(buildRecord(ranked)))
+      } catch (e) {
+        console.warn('[ComparisonModule] Failed to save conversation snapshot; results unaffected.', e)
+      }
+    } catch (e) {
+      console.error('[ComparisonModule] handleAnalyze failed', e)
+      list = []
+      setItems(list)
+      setSearchError(true)
+      setSearchStatus('error')
+    } finally {
+      setIsAnalyzing(false)
+      setCurrentStep(3)
+    }
   }
 
   const handleFeedbackSubmit = async (feedback: FeedbackRecord) => {
@@ -246,6 +401,10 @@ export function ComparisonModule({
         <StepIndicator currentStep={currentStep} steps={t.steps} />
       </section>
 
+      {comparisonJob && searchStatus !== 'idle' && <AgentProgressPanel key={comparisonJob.jobId} job={comparisonJob} t={t} />}
+
+      {restoredResults && <RestoredBanner t={t} />}
+
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm print:border-0 print:shadow-none">
         <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -267,6 +426,7 @@ export function ComparisonModule({
                 c.colPayment,
                 c.colDeliveryMethod,
                 c.colRating,
+                c.sourceLabel,
               ]}
               rows={rows.map((r) => [
                 r.vendor,
@@ -278,10 +438,17 @@ export function ComparisonModule({
                 r.paymentLabel,
                 r.deliveryMethod,
                 `${r.rating.toFixed(1)} (${r.reviews})`,
+                r.source === 'web' ? c.sourceWeb : c.sourceLocal,
               ])}
             />
           </div>
         </div>
+
+        {rows.length > 0 && rows.every((row) => row.source === 'web') && (
+          <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-700">
+            {c.allWebNotice}
+          </div>
+        )}
 
         {searchError ? (
           <div className="flex items-center justify-center rounded-lg border border-dashed border-red-200 bg-red-50 py-12 text-sm text-red-500">
@@ -350,8 +517,17 @@ function ComparisonTable({
             return (
               <tr key={row.id} className={`transition-colors hover:bg-slate-50/80 ${highlight ? 'bg-blue-50/40' : ''}`}>
                 <td className={`sticky left-0 z-10 min-w-[240px] border-r border-gray-100 px-4 py-4 align-middle shadow-[2px_0_5px_rgba(0,0,0,0.03)] ${stickyBg}`}>
-                  <div className="mb-0.5 flex items-center gap-2">
+                  <div className="mb-0.5 flex flex-wrap items-center gap-2">
                     <p className="text-sm font-semibold text-slate-900">{row.vendor}</p>
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+                        row.source === 'web'
+                          ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100'
+                          : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100'
+                      }`}
+                    >
+                      {row.source === 'web' ? c.sourceWeb : c.sourceLocal}
+                    </span>
                     {highlight && (
                       <span className="shrink-0 rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold uppercase text-white">
                         {c.recommended}
@@ -360,12 +536,27 @@ function ComparisonTable({
                   </div>
                   <p className="text-sm text-gray-500">{row.platform}</p>
                   <p className="mt-1 text-sm text-gray-500">{row.product}</p>
+                  {row.source === 'web' && row.sourceUrls?.[0] && (
+                    <a
+                      href={row.sourceUrls[0]}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-1 inline-flex text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                    >
+                      {row.sourceUrls[0]}
+                    </a>
+                  )}
                 </td>
                 <td className="px-4 py-4 align-middle">
                   <MatchScoreBadge score={row.score} />
                 </td>
                 <td className="px-4 py-4 align-middle">
                   <span className="whitespace-nowrap text-sm font-semibold text-slate-900">{row.unitLabel}</span>
+                  {row.source === 'web' && row.priceConfidence === 'unknown' && (
+                    <span className="mt-1 block rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-100">
+                      {c.webNeedsManualCheck}
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-4 align-middle text-sm text-gray-600">{row.deliveryLabel}</td>
                 <td className="px-4 py-4 align-middle">
