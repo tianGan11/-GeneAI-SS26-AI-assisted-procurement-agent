@@ -13,6 +13,7 @@ from psycopg2.extras import Json, RealDictCursor
 from pydantic import BaseModel, Field
 
 from api.auth import AuthUser, get_current_user
+from db_writer import promote_candidate_to_supplier  # 新加的 import
 
 
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
@@ -328,6 +329,12 @@ async def attach_feedback(
     req: FeedbackRecord,
     current_user: Annotated[AuthUser, Depends(get_current_user)],
 ) -> ConversationRecord:
+    # 用户提交评分 = 确认采用这个供应商 → 把它从候选区"转正"进 supplier 表
+    try:
+        promote_candidate_to_supplier(req.chosenName)
+    except Exception as e:
+        print(f"[conversations] 转正供应商失败，不影响反馈保存: {e}")
+
     conn = _db_conn()
     if conn is None:
         records = _get_local_records(current_user.email)

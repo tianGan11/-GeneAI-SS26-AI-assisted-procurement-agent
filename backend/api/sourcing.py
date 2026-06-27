@@ -6,6 +6,7 @@ Optimization over the original:
     requires a valid Bearer token, matching the openapi.yaml contract.
   - Added asynchronous search jobs so long-running live web research can expose
     real progress to the frontend instead of looking frozen behind one request.
+  - Auto-saves search results to Supabase (new suppliers marked origin=web).
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from api.auth import AuthUser, get_current_user
+from db_writer import save_sourcing_request_and_suppliers  # 新加的 import
 
 
 router = APIRouter(prefix="/api/sourcing", tags=["sourcing"])
@@ -112,9 +114,6 @@ async def _run_search_job(job_id: str, query: str, agent: object, structured: Op
         try:
             result = await agent.search_suppliers(query, progress=progress, structured=structured)  # type: ignore[attr-defined]
         except TypeError as exc:
-            # Backward-compatible with tests/older agent objects that have not
-            # added the optional structured= keyword yet. Real agent errors are
-            # still surfaced by retrying only this exact compatibility case.
             if "structured" not in str(exc):
                 raise
             result = await agent.search_suppliers(query, progress=progress)  # type: ignore[attr-defined]
@@ -122,6 +121,15 @@ async def _run_search_job(job_id: str, query: str, agent: object, structured: Op
         job.results = result.get("results", [])
         job.status = "completed"
         _append_event(job, "completed", "候选名单已准备就绪，可以开始查看结果了。", 100)
+        # 自动把这次搜索结果存进数据库（新供应商 origin=web）
+        try:
+            save_sourcing_request_and_suppliers(
+                request_text=query,
+                requested_by=job.owner,
+                suppliers=job.results,
+            )
+        except Exception as e:
+            print(f"[sourcing] 保存数据库失败，不影响返回结果: {e}")
     except Exception as exc:  # pragma: no cover - exact production errors vary
         job.status = "failed"
         job.error = str(exc)
@@ -172,11 +180,23 @@ async def search(
     """
     structured = req.structured.model_dump() if req.structured else None
     try:
-        return await request.app.state.agent.search_suppliers(req.query, structured=structured)
+        result = await request.app.state.agent.search_suppliers(req.query, structured=structured)
     except TypeError as exc:
         if "structured" not in str(exc):
             raise
-        return await request.app.state.agent.search_suppliers(req.query)
+        result = await request.app.state.agent.search_suppliers(req.query)
+
+    # 自动把这次搜索结果存进数据库（新供应商 origin=web）
+    try:
+        save_sourcing_request_and_suppliers(
+            request_text=req.query,
+            requested_by=current_user.email,
+            suppliers=result.get("results", []),
+        )
+    except Exception as e:
+        print(f"[sourcing] 保存数据库失败，不影响返回结果: {e}")
+
+    return result
 
 
 @router.post("/search-jobs", response_model=SearchJobResponse, status_code=status.HTTP_202_ACCEPTED)
