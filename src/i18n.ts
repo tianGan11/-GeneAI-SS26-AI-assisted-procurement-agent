@@ -89,6 +89,10 @@ export interface Translation {
     cardCerts: string
     cardEvidence: string
     cardSources: string
+    sourceLabel: string
+    localDatabaseTag: string
+    webSearchTag: string
+    allWebNotice: string
     match: string
     colName: string
     colLocation: string
@@ -134,6 +138,20 @@ export interface Translation {
     colRating: string
     colAction: string
     recommended: string
+    sourceLocal: string
+    sourceWeb: string
+    webNeedsManualCheck: string
+    allWebNotice: string
+    agentProgress: {
+      eyebrow: string
+      runningTitle: string
+      failedTitle: string
+      description: string
+      progress: string
+      thoughtLogLabel: string
+      emptyText: string
+      activeLabel: string
+    }
     paymentTerms: Record<PaymentTermKey, string>
   }
 
@@ -304,6 +322,10 @@ export const translations: Record<Language, Translation> = {
       cardCerts: 'Certifications',
       cardEvidence: 'Evidence from crawled pages',
       cardSources: 'Sources opened by Agent',
+      sourceLabel: 'Source',
+      localDatabaseTag: 'Local database',
+      webSearchTag: 'Web search',
+      allWebNotice: 'No matching supplier was found in the local database. All displayed results come from web research.',
       match: 'match',
       colName: 'Supplier',
       colLocation: 'Location',
@@ -354,6 +376,21 @@ export const translations: Record<Language, Translation> = {
       colRating: 'Rating',
       colAction: 'Action',
       recommended: 'Top pick',
+      sourceLocal: 'Local quote DB',
+      sourceWeb: 'Web search',
+      webNeedsManualCheck: 'Needs manual price check',
+      allWebNotice: 'No local quote matched this request. The displayed candidates come from web search and may need manual price/delivery verification.',
+      agentProgress: {
+        eyebrow: 'Procurement Agent thinking',
+        runningTitle: 'Procurement Agent is comparing quotes',
+        failedTitle: 'Agent needs attention',
+        description:
+          'I am combining your natural-language need, hard filters, and decision weights, then checking the local quote database and preparing a weighted comparison table.',
+        progress: 'Progress',
+        thoughtLogLabel: 'Agent thought log',
+        emptyText: 'Waiting for the first thought from the backend agent...',
+        activeLabel: 'Working live — new steps will appear here',
+      },
       paymentTerms: {
         onAccount: 'On account',
         prepayment: 'Prepayment',
@@ -524,6 +561,10 @@ export const translations: Record<Language, Translation> = {
       cardCerts: '资质认证',
       cardEvidence: '爬取页面证据',
       cardSources: 'Agent 打开的来源页面',
+      sourceLabel: '来源',
+      localDatabaseTag: '本地数据库',
+      webSearchTag: '网络搜索',
+      allWebNotice: '本地数据库没有找到相应供应商，当前显示的结果全部来源于网络搜索。',
       match: '匹配度',
       colName: '供应商',
       colLocation: '所在地',
@@ -572,6 +613,20 @@ export const translations: Record<Language, Translation> = {
       colRating: '用户评分',
       colAction: '操作',
       recommended: '推荐',
+      sourceLocal: '本地报价库',
+      sourceWeb: '网络搜索',
+      webNeedsManualCheck: '需人工核价',
+      allWebNotice: '本地报价库没有匹配结果，当前候选来自网络搜索；网络价格/交期可能需要人工核验。',
+      agentProgress: {
+        eyebrow: '采购 Agent 思考中',
+        runningTitle: '采购 Agent 正在进行标准品比价',
+        failedTitle: 'Agent 需要关注',
+        description: '我正在合并自然语言需求、前置过滤条件和权重偏好，优先检查本地标准品/报价库，并生成加权对比表。',
+        progress: '进度',
+        thoughtLogLabel: 'Agent 思考流',
+        emptyText: '正在等待后端 Agent 的第一条思考...',
+        activeLabel: '正在实时工作，新步骤会自动出现',
+      },
       paymentTerms: {
         onAccount: '挂帐',
         prepayment: '预付款',

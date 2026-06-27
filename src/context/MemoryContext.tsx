@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from 'react'
 import type { ConversationRecord, FeedbackRecord } from '../types'
 import { loadJSON, saveJSON, STORAGE_KEYS } from '../lib/storage'
-import { api, apiEnabled } from '../lib/api'
+import { api, apiEnabled, type ConversationRange } from '../lib/api'
 import { useAuth } from './AuthContext'
 
 interface MemoryContextValue {
@@ -14,7 +14,7 @@ interface MemoryContextValue {
   remove: (conversationId: string) => Promise<void>
   clearAll: () => Promise<void>
   /** Re-fetches conversations from the backend with a time‑range filter. */
-  reloadConvs: (range?: string) => Promise<void>
+  reloadConvs: (range?: ConversationRange) => Promise<void>
 }
 
 const MemoryContext = createContext<MemoryContextValue | null>(null)
@@ -34,7 +34,7 @@ export function MemoryProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!apiEnabled) return
     if (!user) {
-      setConversations([])
+      queueMicrotask(() => setConversations([]))
       return
     }
     let alive = true

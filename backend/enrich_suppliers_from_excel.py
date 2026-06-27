@@ -18,10 +18,9 @@ from typing import Optional
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://postgres.nhiiifzjdavawgnmfsmr:genai9group18@aws-1-eu-central-1.pooler.supabase.com:5432/postgres"
-)
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is required. Set it in your environment or backend/.env; never hard-code database credentials.")
 
 EXCEL_DIR = os.path.join(os.path.dirname(__file__),
     "..", "AW_ [EXT] Request for Project Background – AI Procurement Agent for Sourcing & Cost Comparison"
@@ -251,7 +250,7 @@ def main():
         cur.execute("SELECT attributes FROM supplier WHERE id = %s", (db_id,))
         row = cur.fetchone()
         if not row:
-            skipped.append((excel_name, db_id, "DB 中不存在"))
+            skipped.append((src_label, db_id, "DB 中不存在"))
             continue
 
         current_attrs = row["attributes"] or {}

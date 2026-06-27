@@ -40,7 +40,7 @@ class FakeWebResearcher:
 
 
 class RetrieverWebResearchIntegrationTest(unittest.TestCase):
-    def test_database_suppliers_are_prioritized_for_repurchase_when_scores_are_close(self):
+    def test_better_web_supplier_can_outrank_database_supplier_after_bonus_reduction(self):
         local_results = [{
             "id": "db-office",
             "name": "Existing Database Office Supplier",
@@ -56,9 +56,10 @@ class RetrieverWebResearchIntegrationTest(unittest.TestCase):
 
         merged = SupplierRetriever._merge_results(local_results, web_results)
 
-        self.assertEqual(merged[0]["id"], "db-office")
-        self.assertEqual(merged[0]["source"], "database")
-        self.assertEqual(merged[0]["repurchasePriority"], "database")
+        self.assertEqual(merged[0]["id"], "web-office")
+        self.assertEqual(merged[1]["id"], "db-office")
+        self.assertEqual(merged[1]["source"], "database")
+        self.assertEqual(merged[1]["repurchasePriority"], "database")
 
     def test_web_supplier_can_still_win_when_score_gap_is_large(self):
         local_results = [{

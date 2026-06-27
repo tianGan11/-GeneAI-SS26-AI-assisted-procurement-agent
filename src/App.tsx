@@ -26,9 +26,10 @@ function Workspace({
   const [restore, setRestore] = useState<ConversationRecord | null>(null)
   const t = translations[language]
 
-  // Manual navigation starts the module fresh; opening from Memory restores it.
+  // Keep modules mounted while navigating inside the app so in-flight jobs,
+  // progress panels, form state, and latest results survive tab switches.
+  // Opening from Memory is the explicit action that replaces a module state.
   const goToModule = (id: ModuleId) => {
-    setRestore(null)
     setActiveModule(id)
   }
   const openConversation = (conv: ConversationRecord) => {
@@ -52,7 +53,7 @@ function Workspace({
       <div className="flex min-h-0 flex-1 overflow-hidden print:overflow-visible">
         <Sidebar active={activeModule} onChange={goToModule} t={t} />
         <main className="min-w-0 flex-1 overflow-y-auto bg-slate-100 p-8 print:overflow-visible print:p-0">
-          {activeModule === 'sourcing' && (
+          <section className={activeModule === 'sourcing' ? 'block' : 'hidden'} aria-hidden={activeModule !== 'sourcing'}>
             <ErrorBoundary
               onError={() => console.error('[App] SourcingModule crashed')}
               fallback={
@@ -62,16 +63,29 @@ function Workspace({
                 </div>
               }
             >
-              <SourcingModule t={t} restore={restore?.module === 'sourcing' ? restore : null} />
+              <SourcingModule
+                key={restore?.module === 'sourcing' ? restore.id : 'sourcing-live'}
+                t={t}
+                restore={restore?.module === 'sourcing' ? restore : null}
+              />
             </ErrorBoundary>
-          )}
-          {activeModule === 'comparison' && (
-            <ComparisonModule t={t} restore={restore?.module === 'comparison' ? restore : null} />
-          )}
-          {activeModule === 'memory' && (
+          </section>
+
+          <section className={activeModule === 'comparison' ? 'block' : 'hidden'} aria-hidden={activeModule !== 'comparison'}>
+            <ComparisonModule
+              key={restore?.module === 'comparison' ? restore.id : 'comparison-live'}
+              t={t}
+              restore={restore?.module === 'comparison' ? restore : null}
+            />
+          </section>
+
+          <section className={activeModule === 'memory' ? 'block' : 'hidden'} aria-hidden={activeModule !== 'memory'}>
             <MemoryModule t={t} language={language} onOpen={openConversation} />
-          )}
-          {activeModule === 'settings' && <SettingsPage t={t} language={language} />}
+          </section>
+
+          <section className={activeModule === 'settings' ? 'block' : 'hidden'} aria-hidden={activeModule !== 'settings'}>
+            <SettingsPage t={t} language={language} />
+          </section>
         </main>
       </div>
     </div>

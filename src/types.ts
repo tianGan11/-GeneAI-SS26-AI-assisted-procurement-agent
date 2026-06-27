@@ -61,6 +61,9 @@ export interface Supplier {
   established?: number
   capabilities?: string[]
   certifications?: string[]
+  /** Source provenance: database/local suppliers vs web research. */
+  source?: string
+  repurchasePriority?: string
   /** URLs fetched during deep supplier research. */
   sourceUrls?: string[]
   /** Short text snippets supporting the extracted supplier profile. */
@@ -79,18 +82,23 @@ export interface ComparisonItem {
   platform: string
   product: string
   matchScore: number
-  /** Numeric unit price in EUR — used for sorting. */
-  unitPriceEur: number
+  /** Numeric unit price in EUR — used for sorting. Null means web candidate needs manual price check. */
+  unitPriceEur: number | null
   /** Original localized price label, e.g. "€ 2.180 / Stk." */
   unitLabel: string
-  /** Numeric lead time in days — used for sorting. */
-  deliveryDays: number
+  /** Numeric lead time in days — used for sorting. Null means web candidate needs manual delivery check. */
+  deliveryDays: number | null
   deliveryLabel: string
   paymentTerm: PaymentTermKey
   paymentLabel: string
   deliveryMethod: string
   rating: number
   reviews: number
+  source?: 'database' | 'web' | string
+  sourceDetail?: string
+  sourceUrls?: string[]
+  evidenceSnippets?: string[]
+  priceConfidence?: 'extracted' | 'unknown' | string
 }
 
 export type DeliveryOptionKey = 'unlimited' | 'within3' | 'within7'

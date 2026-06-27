@@ -13,13 +13,12 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from typing import Annotated, AsyncIterator, Literal
+from typing import Annotated, AsyncIterator, Literal, Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from typing import Optional
 
 from api.auth import AuthUser, get_current_user
 
@@ -110,7 +109,15 @@ async def _run_search_job(job_id: str, query: str, agent: object, structured: Op
         _append_event(job, phase, message, percent)
 
     try:
-        result = await agent.search_suppliers(query, progress=progress, structured=structured)  # type: ignore[attr-defined]
+        try:
+            result = await agent.search_suppliers(query, progress=progress, structured=structured)  # type: ignore[attr-defined]
+        except TypeError as exc:
+            # Backward-compatible with tests/older agent objects that have not
+            # added the optional structured= keyword yet. Real agent errors are
+            # still surfaced by retrying only this exact compatibility case.
+            if "structured" not in str(exc):
+                raise
+            result = await agent.search_suppliers(query, progress=progress)  # type: ignore[attr-defined]
         job.intent = result.get("intent")
         job.results = result.get("results", [])
         job.status = "completed"
@@ -163,7 +170,13 @@ async def search(
 
     Protected: requires Authorization: Bearer *** header.
     """
-    return await request.app.state.agent.search_suppliers(req.query, structured=req.structured.model_dump() if req.structured else None)
+    structured = req.structured.model_dump() if req.structured else None
+    try:
+        return await request.app.state.agent.search_suppliers(req.query, structured=structured)
+    except TypeError as exc:
+        if "structured" not in str(exc):
+            raise
+        return await request.app.state.agent.search_suppliers(req.query)
 
 
 @router.post("/search-jobs", response_model=SearchJobResponse, status_code=status.HTTP_202_ACCEPTED)

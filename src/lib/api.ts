@@ -179,6 +179,19 @@ export interface SourcingJob {
   error?: string | null
 }
 
+export type ComparisonJobEvent = SourcingJobEvent
+
+export interface ComparisonJob {
+  jobId: string
+  status: 'queued' | 'running' | 'completed' | 'failed'
+  progress: number
+  step: string
+  events: ComparisonJobEvent[]
+  intent?: Record<string, unknown> | null
+  results: ComparisonItem[]
+  error?: string | null
+}
+
 /** New-conversation payload: a record without server-generated fields. */
 export type NewConversation = Omit<
   ConversationRecord,
@@ -187,6 +200,24 @@ export type NewConversation = Omit<
   /** requestSnapshot and resultsSnapshot are optional; old records may lack them. */
   requestSnapshot?: Record<string, unknown>
   resultsSnapshot?: Record<string, unknown>[]
+}
+
+export type ConversationRange = '7d' | '30d' | '1y' | 'all'
+
+type RawConversation = ConversationRecord & {
+  request_snapshot?: Record<string, unknown>
+  results_snapshot?: Record<string, unknown>[]
+  created_at?: string
+  timestamp_ms?: number
+}
+
+function normalizeConversation(raw: RawConversation): ConversationRecord {
+  return {
+    ...raw,
+    requestSnapshot: raw.requestSnapshot ?? raw.request_snapshot,
+    resultsSnapshot: raw.resultsSnapshot ?? raw.results_snapshot,
+    timestamp: raw.timestamp ?? raw.timestamp_ms ?? (raw.created_at ? new Date(raw.created_at).getTime() : Date.now()),
+  }
 }
 
 export const api = {
@@ -223,18 +254,32 @@ export const api = {
         method: 'POST',
         body: { query, ...filters },
       }),
+    createJob: (query: string, filters: ComparisonFilters, weights?: { price: number; delivery: number; rating: number }) =>
+      request<ComparisonJob>('/api/comparison/search-jobs', {
+        method: 'POST',
+        body: { query, ...filters, weights },
+      }),
+    getJob: (jobId: string) => request<ComparisonJob>(`/api/comparison/search-jobs/${jobId}`),
+    streamJob: (jobId: string, onEvent: (job: ComparisonJob) => void) =>
+      streamRequest<ComparisonJob>(`/api/comparison/search-jobs/${jobId}/events`, onEvent),
   },
 
   conversations: {
-    list: (range: string = '30d') =>
-      request<ConversationRecord[]>(`/api/conversations?range=${range}`),
-    create: (record: NewConversation) =>
-      request<ConversationRecord>('/api/conversations', { method: 'POST', body: record }),
-    attachFeedback: (id: string, feedback: FeedbackRecord) =>
-      request<ConversationRecord>(`/api/conversations/${id}/feedback`, {
+    list: async (range: ConversationRange = '30d') => {
+      const records = await request<RawConversation[]>(`/api/conversations?range=${encodeURIComponent(range)}`)
+      return records.map(normalizeConversation)
+    },
+    create: async (record: NewConversation) => {
+      const created = await request<RawConversation>('/api/conversations', { method: 'POST', body: record })
+      return normalizeConversation(created)
+    },
+    attachFeedback: async (id: string, feedback: FeedbackRecord) => {
+      const updated = await request<RawConversation>(`/api/conversations/${id}/feedback`, {
         method: 'PATCH',
         body: feedback,
-      }),
+      })
+      return normalizeConversation(updated)
+    },
     remove: (id: string) => request<void>(`/api/conversations/${id}`, { method: 'DELETE' }),
     clear: () => request<void>('/api/conversations', { method: 'DELETE' }),
   },

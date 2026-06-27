@@ -132,6 +132,26 @@ CREATE TABLE feedback (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Frontend memory / conversation history.
+-- Stores complete request/result snapshots for reopening past sourcing and comparison runs.
+CREATE TABLE conversation_history (
+    id               TEXT PRIMARY KEY,
+    user_email       TEXT NOT NULL,
+    module           TEXT NOT NULL CHECK (module IN ('sourcing', 'comparison')),
+    query            TEXT NOT NULL,
+    filters          JSONB NOT NULL DEFAULT '{}',
+    restore          JSONB,
+    request_snapshot JSONB,
+    results_snapshot JSONB,
+    result_count     INTEGER NOT NULL DEFAULT 0,
+    candidate_names  JSONB NOT NULL DEFAULT '[]',
+    feedback         JSONB,
+    timestamp_ms     BIGINT NOT NULL,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+
 -- 历史供应商:每次最终采用了哪家供应商买了哪个产品
 CREATE TABLE purchase_history (
     id           BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -156,6 +176,8 @@ CREATE INDEX idx_reqitem_request   ON request_item(request_id);
 CREATE INDEX idx_candidate_session ON sourcing_candidate(session_id);
 CREATE INDEX idx_purchase_product  ON purchase_history(product_id);
 CREATE INDEX idx_purchase_supplier ON purchase_history(supplier_id);
+CREATE INDEX idx_conversation_history_user_time ON conversation_history(user_email, timestamp_ms DESC);
+CREATE INDEX idx_conversation_history_user_module_time ON conversation_history(user_email, module, timestamp_ms DESC);
 CREATE INDEX idx_product_attrs     ON product  USING GIN (attributes);
 CREATE INDEX idx_supplier_attrs    ON supplier USING GIN (attributes);
 

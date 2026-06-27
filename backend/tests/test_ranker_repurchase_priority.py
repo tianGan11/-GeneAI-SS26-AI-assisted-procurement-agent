@@ -13,7 +13,7 @@ from agent.ranker import LLMRanker
 
 
 class RankerRepurchasePriorityTest(unittest.TestCase):
-    def test_database_supplier_gets_repurchase_bonus_when_scores_are_close(self):
+    def test_better_web_supplier_can_outrank_database_supplier_after_bonus_reduction(self):
         ranker = LLMRanker(llm=None)
         candidates = [
             {
@@ -43,7 +43,8 @@ class RankerRepurchasePriorityTest(unittest.TestCase):
 
         ranked = asyncio.run(ranker.rank_suppliers("A4 paper folders office Germany", candidates))
 
-        self.assertEqual(ranked[0]["id"], "db-office")
+        self.assertEqual(ranked[0]["id"], "web-office")
+        self.assertEqual(ranked[1]["id"], "db-office")
 
 
 if __name__ == "__main__":

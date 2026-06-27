@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import type { Translation } from '../i18n'
 import type { Supplier, ConversationRecord, FeedbackRecord } from '../types'
 import { MOCK_SUPPLIERS } from '../data/suppliers'
-import { api, apiEnabled, type SourcingJob } from '../lib/api'
+import { api, apiEnabled, type SourcingJob, type SourcingStructuredFields } from '../lib/api'
 import { useMemory } from '../context/MemoryContext'
-import { StepIndicator, ExportPrintToolbar, AnalyzeButton } from '../components/shared'
+import { StepIndicator, ExportPrintToolbar, AnalyzeButton, RestoredBanner } from '../components/shared'
 import { FeedbackModal } from '../components/FeedbackModal'
 import { SearchIcon } from '../components/icons'
 
@@ -40,9 +40,21 @@ function SupplierCard({
             </p>
           )}
         </div>
-        <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
-          {Math.round(supplier.matchScore)}% {s.match}
-        </span>
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          <span
+            title={`${s.sourceLabel}: ${isDatabaseSupplier(supplier) ? s.localDatabaseTag : s.webSearchTag}`}
+            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${
+              isDatabaseSupplier(supplier)
+                ? 'bg-amber-50 text-amber-700 ring-amber-600/20'
+                : 'bg-sky-50 text-sky-700 ring-sky-600/20'
+            }`}
+          >
+            {isDatabaseSupplier(supplier) ? s.localDatabaseTag : s.webSearchTag}
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+            {Math.round(supplier.matchScore)}% {s.match}
+          </span>
+        </div>
       </div>
 
       <div className="mt-4 grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
@@ -136,13 +148,33 @@ function Field({ label, value, sub }: { label: string; value?: string; sub?: str
 
 type SearchStatus = 'idle' | 'running' | 'success' | 'empty' | 'error'
 
+function isDatabaseSupplier(supplier: Supplier): boolean {
+  return supplier.source === 'database' || supplier.repurchasePriority === 'database'
+}
+
 function AgentProgressPanel({ job, t }: { job: SourcingJob | null; t: Translation }) {
   const copy = t.sourcing.agentProgress
-  const progress = job?.progress ?? 0
+  const backendProgress = job?.progress ?? 0
+  const [displayedProgress, setDisplayedProgress] = useState(0)
   const events = job?.events ?? []
   const isRunning = job?.status !== 'failed' && job?.status !== 'completed'
+  const progress = Math.round(displayedProgress)
   const statusLabel = job?.status === 'failed' ? copy.failedTitle : copy.runningTitle
   const eventListRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!job) return
+    const timer = window.setInterval(() => {
+      setDisplayedProgress((prev) => {
+        if (job.status === 'completed') return Math.min(100, prev + 4)
+        if (job.status === 'failed') return Math.max(prev, backendProgress)
+        // Smooth, mostly linear visual progress: do not jump to backend event percentages.
+        // Cap below completion until the backend really finishes. 0.28 per 200ms ≈ 84%/minute.
+        return Math.min(92, prev + 0.28)
+      })
+    }, 200)
+    return () => window.clearInterval(timer)
+  }, [backendProgress, job])
 
   useEffect(() => {
     const list = eventListRef.current
@@ -239,7 +271,7 @@ export function SourcingModule({
     } catch {
       console.log(`[SourcingModule] MOUNTED (perf API unavailable)`)
     }
-  }, [])
+  }, [restore])
 
   // Cleanup any stale sessionStorage artifacts from previous versions.
   useEffect(() => {
@@ -254,17 +286,20 @@ export function SourcingModule({
   // Only the `restore` prop (from Memory module → conversation history) can
   // pre-fill state.
 
-  const [query, setQuery] = useState(
-    restore?.restore?.query ?? ''
-  )
+  const savedResults = Array.isArray(restore?.resultsSnapshot)
+    ? (restore.resultsSnapshot as unknown as Supplier[])
+    : undefined
+  const savedRestore = restore?.restore
+
+  const [query, setQuery] = useState(savedRestore?.query ?? '')
   const [results, setResults] = useState<Supplier[]>(
-    apiEnabled ? [] : MOCK_SUPPLIERS
+    savedResults ?? (apiEnabled ? [] : MOCK_SUPPLIERS)
   )
-  const [currentStep, setCurrentStep] = useState(0)
+  const [currentStep, setCurrentStep] = useState(savedResults || !apiEnabled ? 3 : 0)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [hasRun, setHasRun] = useState(!apiEnabled)
+  const [hasRun, setHasRun] = useState(!!savedResults || !apiEnabled)
   const [searchStatus, setSearchStatus] = useState<SearchStatus>(
-    apiEnabled ? 'idle' : 'success'
+    savedResults ? 'success' : apiEnabled ? 'idle' : 'success'
   )
   const [searchJob, setSearchJob] = useState<SourcingJob | null>(null)
   const [searchError, setSearchError] = useState(false)
@@ -272,18 +307,16 @@ export function SourcingModule({
   const [activeConversationId, setActiveConversationId] = useState<string | null>(
     restore?.id ?? null
   )
+  const hasOnlyWebResults = results.length > 0 && results.every((supplier) => !isDatabaseSupplier(supplier))
 
   // ── Structured fields state (双模输入表单) ──────────────────────────────
-  // Initialized empty on mount — structured data is not restored from memory
-  // to avoid coupling the module to protocol changes; it is merged into the
-  // enhanced query string instead.
-  const [structProductName, setStructProductName] = useState('')
-  const [structQuantity, setStructQuantity] = useState('')
-  const [structUnit, setStructUnit] = useState('pcs')
-  const [structBrand, setStructBrand] = useState('')
-  const [structCategory, setStructCategory] = useState('')
-  const [structCountry, setStructCountry] = useState('')
-  const [structCerts, setStructCerts] = useState('')
+  const [structProductName, setStructProductName] = useState(savedRestore?.productName ?? '')
+  const [structQuantity, setStructQuantity] = useState(savedRestore?.quantity ?? '')
+  const [structUnit, setStructUnit] = useState(savedRestore?.unit ?? 'pcs')
+  const [structBrand, setStructBrand] = useState(savedRestore?.brand ?? '')
+  const [structCategory, setStructCategory] = useState(savedRestore?.structuredCategory ?? '')
+  const [structCountry, setStructCountry] = useState(savedRestore?.structuredCountry ?? '')
+  const [structCerts, setStructCerts] = useState(savedRestore?.structuredCerts ?? '')
 
   /** Append structured info to the NL query for backward compat / mock mode. */
   const buildEnhancedQuery = () => {
@@ -297,6 +330,19 @@ export function SourcingModule({
     if (structCountry) parts.push(`Target Country: ${structCountry}`)
     if (structCerts) parts.push(`Certifications: ${structCerts}`)
     return `${query}\n---\n${parts.join('\n')}`
+  }
+
+  const getStructuredPayload = (): SourcingStructuredFields | undefined => {
+    const structured: SourcingStructuredFields = {
+      productName: structProductName || undefined,
+      quantity: structQuantity || undefined,
+      unit: structUnit || undefined,
+      brand: structBrand || undefined,
+      category: structCategory || undefined,
+      country: structCountry || undefined,
+      certifications: structCerts || undefined,
+    }
+    return Object.values(structured).some(Boolean) ? structured : undefined
   }
 
   /** Human-readable filter summary for the memory card. */
@@ -313,18 +359,29 @@ export function SourcingModule({
   }
 
   // Builds the memory record for the current query + all entered inputs.
-  // Structured form fields are merged into the query string (via buildEnhancedQuery)
-  // rather than saved as separate restore fields, keeping the protocol minimal.
-  const buildRecord = (list: Supplier[]) => ({
-    module: 'sourcing' as const,
-    query: query.trim() || '(no text — browse all suppliers)',
-    filters: buildFilterSummary(),
-    restore: {
-      query,
-    },
-    resultCount: list.length,
-    candidateNames: list.map((r) => r.name),
-  })
+  const buildRecord = (list: Supplier[]) => {
+    const enhancedQuery = buildEnhancedQuery()
+    const structured = getStructuredPayload()
+    return {
+      module: 'sourcing' as const,
+      query: query.trim() || '(no text — browse all suppliers)',
+      filters: buildFilterSummary(),
+      restore: {
+        query,
+        productName: structProductName || undefined,
+        quantity: structQuantity || undefined,
+        unit: structUnit || undefined,
+        brand: structBrand || undefined,
+        structuredCategory: structCategory || undefined,
+        structuredCountry: structCountry || undefined,
+        structuredCerts: structCerts || undefined,
+      },
+      requestSnapshot: { query, enhancedQuery, structured: structured ?? null },
+      resultCount: list.length,
+      candidateNames: list.map((r) => r.name),
+      resultsSnapshot: list as unknown as Record<string, unknown>[],
+    }
+  }
 
   const pollSearchJob = async (jobId: string): Promise<SourcingJob> => {
     for (;;) {
@@ -341,6 +398,7 @@ export function SourcingModule({
   const handleAnalyze = async () => {
     console.log(`[SourcingModule] handleAnalyze STARTED`, { query: query.slice(0, 60) })
     const enhancedQuery = buildEnhancedQuery()
+    const structured = getStructuredPayload()
     setIsAnalyzing(true)
     setHasRun(false)
     setSearchStatus('running')
@@ -354,8 +412,8 @@ export function SourcingModule({
       if (apiEnabled) {
         try {
           // Preferred path: async job with live "Agent Thinking" progress (SSE).
-          // Structured form fields are merged into enhancedQuery, so no second arg.
-          const created = await api.sourcing.createJob(enhancedQuery)
+          // Send both enhanced text and structured fields; older backends ignore unknown structured payloads.
+          const created = await api.sourcing.createJob(enhancedQuery, structured)
           setSearchJob(created)
           console.log(`[SourcingModule] Job created:`, created.jobId)
           let finished: SourcingJob
@@ -384,7 +442,7 @@ export function SourcingModule({
           // Backend has no job endpoints yet (older deploy → 404). Fall back to the
           // plain synchronous search so results still load (without live progress).
           setSearchJob(null)
-          const res = await api.sourcing.search(enhancedQuery)
+          const res = await api.sourcing.search(enhancedQuery, structured)
           list = res.results ?? []
           setResults(list)
           setSearchStatus(list.length > 0 ? 'success' : 'empty')
@@ -546,10 +604,11 @@ export function SourcingModule({
         <StepIndicator currentStep={currentStep} steps={t.steps} />
       </section>
 
-      {searchJob && searchStatus !== 'idle' && <AgentProgressPanel job={searchJob} t={t} />}
+      {searchJob && searchStatus !== 'idle' && <AgentProgressPanel key={searchJob.jobId} job={searchJob} t={t} />}
 
       {hasRun && (
         <section className="space-y-4">
+          {savedResults && <RestoredBanner t={t} />}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <h2 className="text-base font-semibold text-slate-900">
@@ -575,6 +634,7 @@ export function SourcingModule({
                 t.sourcing.cardRevenue,
                 t.sourcing.cardCapabilities,
                 t.sourcing.cardCerts,
+                t.sourcing.sourceLabel,
                 t.sourcing.match,
               ]}
               rows={results.map((r) => [
@@ -589,10 +649,17 @@ export function SourcingModule({
                 r.annualRevenue ?? '',
                 (r.capabilities ?? []).join('; '),
                 (r.certifications ?? []).join('; '),
+                isDatabaseSupplier(r) ? t.sourcing.localDatabaseTag : t.sourcing.webSearchTag,
                 `${Math.round(r.matchScore)}%`,
               ])}
             />
           </div>
+
+          {!searchError && hasOnlyWebResults && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-3 text-sm font-medium text-amber-800 shadow-sm print:hidden">
+              {t.sourcing.allWebNotice}
+            </div>
+          )}
 
           {searchError ? (
             <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-red-200 bg-red-50 p-12 text-red-500">
