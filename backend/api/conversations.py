@@ -100,6 +100,21 @@ def _ensure_table(conn) -> None:
         )
         cur.execute(
             """
+            ALTER TABLE conversation_history
+                ADD COLUMN IF NOT EXISTS filters JSONB NOT NULL DEFAULT '{}',
+                ADD COLUMN IF NOT EXISTS restore JSONB,
+                ADD COLUMN IF NOT EXISTS request_snapshot JSONB,
+                ADD COLUMN IF NOT EXISTS results_snapshot JSONB,
+                ADD COLUMN IF NOT EXISTS result_count INTEGER NOT NULL DEFAULT 0,
+                ADD COLUMN IF NOT EXISTS candidate_names JSONB NOT NULL DEFAULT '[]',
+                ADD COLUMN IF NOT EXISTS feedback JSONB,
+                ADD COLUMN IF NOT EXISTS timestamp_ms BIGINT NOT NULL DEFAULT 0,
+                ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            """
+        )
+        cur.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_conversation_history_user_time
             ON conversation_history (user_email, timestamp_ms DESC)
             """

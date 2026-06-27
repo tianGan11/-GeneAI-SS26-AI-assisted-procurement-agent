@@ -149,7 +149,7 @@ function Field({ label, value, sub }: { label: string; value?: string; sub?: str
 type SearchStatus = 'idle' | 'running' | 'success' | 'empty' | 'error'
 
 function isDatabaseSupplier(supplier: Supplier): boolean {
-  return supplier.source === 'database' || supplier.repurchasePriority === 'database'
+  return supplier.source !== 'web'
 }
 
 function AgentProgressPanel({ job, t }: { job: SourcingJob | null; t: Translation }) {

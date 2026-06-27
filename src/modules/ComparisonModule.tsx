@@ -426,7 +426,7 @@ export function ComparisonModule({
                 c.colPayment,
                 c.colDeliveryMethod,
                 c.colRating,
-                'Source',
+                c.sourceLabel,
               ]}
               rows={rows.map((r) => [
                 r.vendor,

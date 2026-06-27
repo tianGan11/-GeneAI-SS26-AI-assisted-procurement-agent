@@ -243,6 +243,62 @@ paths:
                     items:
                       $ref: '#/components/schemas/ComparisonItem'
 
+  /api/comparison/search-jobs:
+    post:
+      tags: [Comparison]
+      summary: Start an asynchronous quote comparison job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ComparisonSearchRequest'
+      responses:
+        '202':
+          description: Quote comparison job accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComparisonJobResponse'
+
+  /api/comparison/search-jobs/{job_id}:
+    get:
+      tags: [Comparison]
+      summary: Poll an asynchronous quote comparison job
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Current comparison job state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComparisonJobResponse'
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /api/comparison/search-jobs/{job_id}/events:
+    get:
+      tags: [Comparison]
+      summary: Stream quote comparison job progress as Server-Sent Events
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Server-Sent Events containing ComparisonJobResponse payloads
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '404':
+          $ref: '#/components/responses/Error'
+
   /api/conversations:
     get:
       tags: [Conversations]
@@ -420,6 +476,7 @@ components:
         structured:
           $ref: '#/components/schemas/SourcingStructuredFields'
 
+    SourcingStructuredFields:
       type: object
       description: Optional structured sourcing fields; they override/augment parsed intent.
       properties:
@@ -499,6 +556,31 @@ components:
           type: string
           nullable: true
 
+    ComparisonJobResponse:
+      type: object
+      required: [jobId, status, progress, step, events, results]
+      properties:
+        jobId: { type: string }
+        status:
+          type: string
+          enum: [queued, running, completed, failed]
+        progress: { type: integer, minimum: 0, maximum: 100 }
+        step: { type: string }
+        events:
+          type: array
+          items: { $ref: '#/components/schemas/SearchJobEvent' }
+        intent:
+          type: object
+          nullable: true
+          additionalProperties: true
+        results:
+          type: array
+          items: { $ref: '#/components/schemas/ComparisonItem' }
+        error:
+          type: string
+          nullable: true
+
+    PaymentTerm:
       type: string
       enum: [onAccount, prepayment, card]
 
@@ -515,7 +597,8 @@ components:
         matchScore: { type: number, minimum: 0, maximum: 100 }
         unitPriceEur:
           type: number
-          description: Numeric unit price in EUR (used for ranking)
+          nullable: true
+          description: Numeric unit price in EUR; null means manual price check needed
           example: 11.4
         unitLabel:
           type: string
@@ -523,7 +606,8 @@ components:
           example: '€ 11,40 / Kartusche'
         deliveryDays:
           type: integer
-          description: Numeric lead time in days (used for ranking)
+          nullable: true
+          description: Numeric lead time in days; null means manual delivery check needed
         deliveryLabel:
           type: string
           example: '3–5 Werktage'
@@ -534,6 +618,15 @@ components:
         deliveryMethod: { type: string }
         rating: { type: number, minimum: 0, maximum: 5 }
         reviews: { type: integer }
+        source: { type: string, enum: [database, web] }
+        sourceDetail: { type: string }
+        sourceUrls:
+          type: array
+          items: { type: string, format: uri }
+        evidenceSnippets:
+          type: array
+          items: { type: string }
+        priceConfidence: { type: string, enum: [extracted, unknown] }
 
     DeliveryOption:
       type: string
@@ -547,6 +640,7 @@ components:
         minPrice: { type: number, description: 'Optional hard filter (EUR)' }
         maxPrice: { type: number, description: 'Optional hard filter (EUR)' }
         deliveryTime: { $ref: '#/components/schemas/DeliveryOption' }
+        weights: { $ref: '#/components/schemas/FactorWeights' }
 
     FactorWeights:
       type: object

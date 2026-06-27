@@ -138,6 +138,7 @@ export interface Translation {
     colRating: string
     colAction: string
     recommended: string
+    sourceLabel: string
     sourceLocal: string
     sourceWeb: string
     webNeedsManualCheck: string
@@ -376,6 +377,7 @@ export const translations: Record<Language, Translation> = {
       colRating: 'Rating',
       colAction: 'Action',
       recommended: 'Top pick',
+      sourceLabel: 'Source',
       sourceLocal: 'Local quote DB',
       sourceWeb: 'Web search',
       webNeedsManualCheck: 'Needs manual price check',
@@ -613,6 +615,7 @@ export const translations: Record<Language, Translation> = {
       colRating: '用户评分',
       colAction: '操作',
       recommended: '推荐',
+      sourceLabel: '来源',
       sourceLocal: '本地报价库',
       sourceWeb: '网络搜索',
       webNeedsManualCheck: '需人工核价',

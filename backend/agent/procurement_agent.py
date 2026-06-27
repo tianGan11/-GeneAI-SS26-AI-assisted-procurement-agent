@@ -278,22 +278,50 @@ class ProcurementAgent:
             raw_terms.extend(re.findall(r"[a-zA-Z0-9äöüÄÖÜß]{3,}", str(keyword).lower()))
         return {term for term in raw_terms if term not in cls.QUOTE_WEB_STOPWORDS and len(term) >= 3}
 
-    @staticmethod
-    def _extract_eur_price(text: str) -> float | None:
+    @classmethod
+    def _extract_eur_price(cls, text: str) -> float | None:
         patterns = [
-            r"€\s*([0-9]+(?:[.,][0-9]{1,2})?)",
-            r"([0-9]+(?:[.,][0-9]{1,2})?)\s*(?:EUR|Euro|€)",
+            r"€\s*([0-9][0-9.,]*(?:[.,][0-9]{2})?)",
+            r"([0-9][0-9.,]*(?:[.,][0-9]{2})?)\s*(?:EUR|Euro|€)",
         ]
         for pattern in patterns:
             match = re.search(pattern, text, flags=re.IGNORECASE)
-            if match:
-                try:
-                    value = float(match.group(1).replace(",", "."))
-                except ValueError:
-                    continue
-                if 0 < value < 100000:
-                    return value
+            if not match:
+                continue
+            value = cls._parse_price_number(match.group(1))
+            if value is not None and 0 < value < 100000:
+                return value
         return None
+
+    @staticmethod
+    def _parse_price_number(raw: str) -> float | None:
+        value = raw.strip().replace(" ", "")
+        if not value:
+            return None
+        dot = value.rfind(".")
+        comma = value.rfind(",")
+        if dot != -1 and comma != -1:
+            # Last separator is decimal, the other is thousands: 1.234,56 / 1,234.56
+            if dot > comma:
+                value = value.replace(",", "")
+            else:
+                value = value.replace(".", "").replace(",", ".")
+        elif comma != -1:
+            parts = value.split(",")
+            if len(parts[-1]) == 2:
+                value = "".join(parts[:-1]).replace(",", "") + "." + parts[-1]
+            else:
+                value = value.replace(",", "")
+        elif dot != -1:
+            parts = value.split(".")
+            if len(parts) > 2 and len(parts[-1]) == 2:
+                value = "".join(parts[:-1]) + "." + parts[-1]
+            elif len(parts) > 2:
+                value = "".join(parts)
+        try:
+            return float(value)
+        except ValueError:
+            return None
 
     @staticmethod
     def _hostname(url: str) -> str:

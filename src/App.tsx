@@ -22,6 +22,10 @@ function Workspace({
 }) {
   const { user } = useAuth()
   const [activeModule, setActiveModule] = useState<ModuleId>('sourcing')
+  const [moduleKeys, setModuleKeys] = useState<Record<'sourcing' | 'comparison', string>>({
+    sourcing: 'sourcing-live',
+    comparison: 'comparison-live',
+  })
   // A conversation queued to reopen inside its source module (from Memory).
   const [restore, setRestore] = useState<ConversationRecord | null>(null)
   const t = translations[language]
@@ -34,6 +38,9 @@ function Workspace({
   }
   const openConversation = (conv: ConversationRecord) => {
     setRestore(conv)
+    if (conv.module === 'sourcing' || conv.module === 'comparison') {
+      setModuleKeys((prev) => ({ ...prev, [conv.module]: conv.id }))
+    }
     setActiveModule(conv.module)
   }
 
@@ -64,7 +71,7 @@ function Workspace({
               }
             >
               <SourcingModule
-                key={restore?.module === 'sourcing' ? restore.id : 'sourcing-live'}
+                key={moduleKeys.sourcing}
                 t={t}
                 restore={restore?.module === 'sourcing' ? restore : null}
               />
@@ -73,7 +80,7 @@ function Workspace({
 
           <section className={activeModule === 'comparison' ? 'block' : 'hidden'} aria-hidden={activeModule !== 'comparison'}>
             <ComparisonModule
-              key={restore?.module === 'comparison' ? restore.id : 'comparison-live'}
+              key={moduleKeys.comparison}
               t={t}
               restore={restore?.module === 'comparison' ? restore : null}
             />
