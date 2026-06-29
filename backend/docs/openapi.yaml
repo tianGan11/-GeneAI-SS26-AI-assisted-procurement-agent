@@ -1,0 +1,719 @@
+openapi: 3.0.3
+info:
+  title: Fuyao Procurement Cloud API
+  version: 0.1.0
+  description: >
+    Backend contract for the Fuyao procurement SaaS. This mirrors exactly what
+    the frontend calls in `src/lib/api.ts`; the data shapes come from
+    `src/types.ts` (the single source of truth). Implement this and the
+    frontend works with no changes — just set `VITE_API_BASE_URL` to your URL.
+
+
+    Conventions:
+      * REST + JSON, all paths under `/api`.
+      * Auth: every endpoint except `POST /api/auth/login` requires
+        `Authorization: Bearer <JWT>`.
+      * Errors use the envelope `{ "error": { "code", "message" } }`.
+      * Timestamps are epoch MILLISECONDS (numbers), matching JS `Date.now()`.
+        If you store `timestamptz` in Postgres, convert to ms on the way out.
+      * `id` fields are strings (UUID recommended).
+
+servers:
+  - url: '{baseUrl}'
+    description: Backend base URL (set as VITE_API_BASE_URL in the frontend)
+    variables:
+      baseUrl:
+        default: http://localhost:8000
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Health
+  - name: Auth
+  - name: Vault
+  - name: Sourcing
+  - name: Comparison
+  - name: Conversations
+
+paths:
+  /api/health:
+    get:
+      tags: [Health]
+      summary: Backend health check
+      security: []
+      responses:
+        '200':
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Sign in, returns a JWT and the user profile
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          $ref: '#/components/responses/Error'
+
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      summary: Current user for the bearer token (used to restore a session)
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthUser'
+        '401':
+          $ref: '#/components/responses/Error'
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Invalidate the current session
+      responses:
+        '204':
+          description: Logged out
+
+  /api/vault/keys:
+    get:
+      tags: [Vault]
+      summary: List the user's stored API keys (masked values only)
+      responses:
+        '200':
+          description: Vault keys (never include the plaintext secret)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VaultKey'
+    post:
+      tags: [Vault]
+      summary: Store/update a secret (encrypt at rest; return masked only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VaultKeyCreate'
+      responses:
+        '201':
+          description: Saved (masked)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VaultKey'
+
+  /api/vault/keys/{id}:
+    delete:
+      tags: [Vault]
+      summary: Delete a stored key
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '204':
+          description: Deleted
+
+  /api/sourcing/search:
+    post:
+      tags: [Sourcing]
+      summary: Find suppliers for a natural-language requirement
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SourcingSearchRequest'
+      responses:
+        '200':
+          description: Matching suppliers
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [results]
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Supplier'
+
+  /api/sourcing/search-jobs:
+    post:
+      tags: [Sourcing]
+      summary: Start an asynchronous supplier research job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SourcingSearchRequest'
+      responses:
+        '202':
+          description: Search job accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchJobResponse'
+
+  /api/sourcing/search-jobs/{job_id}:
+    get:
+      tags: [Sourcing]
+      summary: Poll an asynchronous supplier research job
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Current job state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchJobResponse'
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /api/sourcing/search-jobs/{job_id}/events:
+    get:
+      tags: [Sourcing]
+      summary: Stream supplier research job progress as Server-Sent Events
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Server-Sent Events containing SearchJobResponse payloads
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /api/comparison/search:
+    post:
+      tags: [Comparison]
+      summary: Find standard-product quotes (hard filters optional)
+      description: >
+        Returns candidate quotes. The frontend applies the price/delivery
+        hard-filters and the user-weighted ranking itself, so honoring the
+        filters here is optional (idempotent if you do).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ComparisonSearchRequest'
+      responses:
+        '200':
+          description: Matching quotes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [results]
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ComparisonItem'
+
+  /api/comparison/search-jobs:
+    post:
+      tags: [Comparison]
+      summary: Start an asynchronous quote comparison job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ComparisonSearchRequest'
+      responses:
+        '202':
+          description: Quote comparison job accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComparisonJobResponse'
+
+  /api/comparison/search-jobs/{job_id}:
+    get:
+      tags: [Comparison]
+      summary: Poll an asynchronous quote comparison job
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Current comparison job state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComparisonJobResponse'
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /api/comparison/search-jobs/{job_id}/events:
+    get:
+      tags: [Comparison]
+      summary: Stream quote comparison job progress as Server-Sent Events
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Server-Sent Events containing ComparisonJobResponse payloads
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /api/conversations:
+    get:
+      tags: [Conversations]
+      summary: List the user's conversation memory (newest first)
+      parameters:
+        - name: range
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [7d, 30d, 1y, all]
+            default: 30d
+          description: Time range filter; all returns every saved conversation.
+      responses:
+        '200':
+          description: Conversation records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ConversationRecord'
+    post:
+      tags: [Conversations]
+      summary: Log a query + all inputs (server assigns id + timestamp)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewConversation'
+      responses:
+        '201':
+          description: Created record (with id + timestamp)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationRecord'
+    delete:
+      tags: [Conversations]
+      summary: Clear all of the user's conversations
+      responses:
+        '204':
+          description: Cleared
+
+  /api/conversations/{id}/feedback:
+    patch:
+      tags: [Conversations]
+      summary: Attach feedback (chosen supplier + star ratings) to a conversation
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeedbackRecord'
+      responses:
+        '200':
+          description: Updated record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationRecord'
+
+  /api/conversations/{id}:
+    delete:
+      tags: [Conversations]
+      summary: Delete a single conversation
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '204':
+          description: Deleted
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    IdParam:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+
+  responses:
+    Error:
+      description: Error envelope
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              example: INVALID_CREDENTIALS
+            message:
+              type: string
+              example: Email or password is incorrect
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+
+    LoginResponse:
+      type: object
+      required: [token, user]
+      properties:
+        token:
+          type: string
+          description: 'JWT to send as Authorization: Bearer <token>'
+        user:
+          $ref: '#/components/schemas/AuthUser'
+
+    AuthUser:
+      type: object
+      required: [email, name, company, role]
+      properties:
+        email: { type: string }
+        name: { type: string }
+        company: { type: string }
+        role: { type: string }
+
+    VaultKey:
+      type: object
+      required: [id, label, maskedValue, updatedAt]
+      properties:
+        id: { type: string }
+        label: { type: string, example: AI Search Provider }
+        maskedValue:
+          type: string
+          description: Masked for display; never the plaintext secret
+          example: '••••••••AB12'
+        updatedAt:
+          type: integer
+          format: int64
+          description: Epoch milliseconds
+
+    VaultKeyCreate:
+      type: object
+      required: [label, secret]
+      properties:
+        label: { type: string }
+        secret:
+          type: string
+          description: Plaintext secret — encrypt at rest, never return it
+
+    SourcingSearchRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+          example: Water deflector strips and glass adhesive in Germany
+        structured:
+          $ref: '#/components/schemas/SourcingStructuredFields'
+
+    SourcingStructuredFields:
+      type: object
+      description: Optional structured sourcing fields; they override/augment parsed intent.
+      properties:
+        productName: { type: string }
+        quantity: { type: string }
+        unit: { type: string }
+        brand: { type: string }
+        category: { type: string }
+        country: { type: string }
+        certifications: { type: string }
+
+    SupplierCategory:
+      type: string
+      description: Open category string. Known examples include waterDeflector, glassAdhesive, rubberSeal, glassRaw, hardware, packaging, cleaning, office, safetyShoes, firstAid, equipment.
+
+    Supplier:
+      type: object
+      required:
+        [id, name, category, country, city, address, contactPerson, phone, email,
+         website, employees, annualRevenue, established, capabilities, certifications, matchScore]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        category: { $ref: '#/components/schemas/SupplierCategory' }
+        country: { type: string }
+        city: { type: string }
+        address: { type: string }
+        contactPerson: { type: string }
+        phone: { type: string }
+        email: { type: string }
+        website: { type: string }
+        employees: { type: string, description: 'Headcount band, e.g. "250–500"' }
+        annualRevenue: { type: string, description: 'e.g. "€ 80M–120M"' }
+        established: { type: integer, example: 1995 }
+        capabilities:
+          type: array
+          items: { type: string }
+        certifications:
+          type: array
+          items: { type: string }
+        matchScore:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Relevance to the query (0–100)
+
+    SearchJobEvent:
+      type: object
+      required: [timestamp, phase, message, progress]
+      properties:
+        timestamp: { type: integer, format: int64, description: Epoch milliseconds }
+        phase: { type: string }
+        message: { type: string }
+        progress: { type: integer, minimum: 0, maximum: 100 }
+
+    SearchJobResponse:
+      type: object
+      required: [jobId, status, progress, step, events, results]
+      properties:
+        jobId: { type: string }
+        status:
+          type: string
+          enum: [queued, running, completed, failed]
+        progress: { type: integer, minimum: 0, maximum: 100 }
+        step: { type: string }
+        events:
+          type: array
+          items: { $ref: '#/components/schemas/SearchJobEvent' }
+        intent:
+          type: object
+          nullable: true
+          additionalProperties: true
+        results:
+          type: array
+          items: { $ref: '#/components/schemas/Supplier' }
+        error:
+          type: string
+          nullable: true
+
+    ComparisonJobResponse:
+      type: object
+      required: [jobId, status, progress, step, events, results]
+      properties:
+        jobId: { type: string }
+        status:
+          type: string
+          enum: [queued, running, completed, failed]
+        progress: { type: integer, minimum: 0, maximum: 100 }
+        step: { type: string }
+        events:
+          type: array
+          items: { $ref: '#/components/schemas/SearchJobEvent' }
+        intent:
+          type: object
+          nullable: true
+          additionalProperties: true
+        results:
+          type: array
+          items: { $ref: '#/components/schemas/ComparisonItem' }
+        error:
+          type: string
+          nullable: true
+
+    PaymentTerm:
+      type: string
+      enum: [onAccount, prepayment, card]
+
+    ComparisonItem:
+      type: object
+      required:
+        [id, vendor, platform, product, matchScore, unitPriceEur, unitLabel,
+         deliveryDays, deliveryLabel, paymentTerm, paymentLabel, deliveryMethod, rating, reviews]
+      properties:
+        id: { type: string }
+        vendor: { type: string }
+        platform: { type: string }
+        product: { type: string }
+        matchScore: { type: number, minimum: 0, maximum: 100 }
+        unitPriceEur:
+          type: number
+          nullable: true
+          description: Numeric unit price in EUR; null means manual price check needed
+          example: 11.4
+        unitLabel:
+          type: string
+          description: Original localized display label
+          example: '€ 11,40 / Kartusche'
+        deliveryDays:
+          type: integer
+          nullable: true
+          description: Numeric lead time in days; null means manual delivery check needed
+        deliveryLabel:
+          type: string
+          example: '3–5 Werktage'
+        paymentTerm: { $ref: '#/components/schemas/PaymentTerm' }
+        paymentLabel:
+          type: string
+          example: 'Invoice (Rechnung 30 Tage)'
+        deliveryMethod: { type: string }
+        rating: { type: number, minimum: 0, maximum: 5 }
+        reviews: { type: integer }
+        source: { type: string, enum: [database, web] }
+        sourceDetail: { type: string }
+        sourceUrls:
+          type: array
+          items: { type: string, format: uri }
+        evidenceSnippets:
+          type: array
+          items: { type: string }
+        priceConfidence: { type: string, enum: [extracted, unknown] }
+
+    DeliveryOption:
+      type: string
+      enum: [unlimited, within3, within7]
+
+    ComparisonSearchRequest:
+      type: object
+      required: [query]
+      properties:
+        query: { type: string }
+        minPrice: { type: number, description: 'Optional hard filter (EUR)' }
+        maxPrice: { type: number, description: 'Optional hard filter (EUR)' }
+        deliveryTime: { $ref: '#/components/schemas/DeliveryOption' }
+        weights: { $ref: '#/components/schemas/FactorWeights' }
+
+    FactorWeights:
+      type: object
+      description: User-set ranking weights; the three always sum to 100
+      required: [price, delivery, rating]
+      properties:
+        price: { type: integer }
+        delivery: { type: integer }
+        rating: { type: integer }
+
+    FeedbackRecord:
+      type: object
+      required: [chosenName, quality, logistics, priceSatisfaction, service, comment, submittedAt]
+      properties:
+        chosenName: { type: string }
+        quality: { type: integer, minimum: 0, maximum: 5 }
+        logistics: { type: integer, minimum: 0, maximum: 5 }
+        priceSatisfaction: { type: integer, minimum: 0, maximum: 5 }
+        service: { type: integer, minimum: 0, maximum: 5 }
+        comment: { type: string }
+        submittedAt: { type: integer, format: int64, description: Epoch milliseconds }
+
+    ConversationRestore:
+      type: object
+      description: Raw inputs so a past conversation can be reopened in its module
+      required: [query]
+      properties:
+        query: { type: string }
+        minPrice: { type: string, description: 'Raw text input (note: string, not number)' }
+        maxPrice: { type: string }
+        deliveryTime: { $ref: '#/components/schemas/DeliveryOption' }
+        weights: { $ref: '#/components/schemas/FactorWeights' }
+        productName: { type: string }
+        quantity: { type: string }
+        unit: { type: string }
+        brand: { type: string }
+        structuredCategory: { type: string }
+        structuredCountry: { type: string }
+        structuredCerts: { type: string }
+
+    NewConversation:
+      type: object
+      description: Body for POST /api/conversations (server adds id + timestamp)
+      required: [module, query, filters, resultCount, candidateNames]
+      properties:
+        module:
+          type: string
+          enum: [sourcing, comparison]
+        query: { type: string }
+        filters:
+          type: object
+          additionalProperties: { type: string }
+          description: Human-readable filter summary for the memory list
+        restore: { $ref: '#/components/schemas/ConversationRestore' }
+        requestSnapshot:
+          type: object
+          additionalProperties: true
+        resultsSnapshot:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        resultCount: { type: integer }
+        candidateNames:
+          type: array
+          items: { type: string }
+
+    ConversationRecord:
+      allOf:
+        - $ref: '#/components/schemas/NewConversation'
+        - type: object
+          required: [id, timestamp]
+          properties:
+            id: { type: string }
+            timestamp: { type: integer, format: int64, description: Epoch milliseconds }
+            feedback: { $ref: '#/components/schemas/FeedbackRecord' }

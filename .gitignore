@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+backend/venv/
+
+# Environment (API keys, database URLs — NEVER commit)
+.env
+backend/.env
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Test cache
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build output
+dist/
+build/
+
+# ChromaDB data (local vector DB — may contain PII)
+chroma_data/
+backend/chroma_data/
+
+# Logs
+*.log
+
+# Local user conversation data (never commit)
+backend/data/conversations/
