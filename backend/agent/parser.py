@@ -35,12 +35,33 @@ CATEGORY_KEYWORDS: dict[str, set[str]] = {
         "玻璃原片", "floatglas",
     },
     "hardware": {
-        "hardware", "fastener", "rivet", "bolt", "nut",
-        "五金", "beschläge", "befestigung",
-        "laptop", "笔记本", "电脑", "computer",
-        "monitor", "显示器", "docking",
-        "headset", "耳机", "手机", "phone", "iphone", "workstation",
-        "打印机",
+        "hardware", "fastener", "rivet", "bolt", "nut", "screw", "washer",
+        "五金", "beschläge", "befestigung", "schraube", "mutter",
+    },
+    "laptop": {
+        "laptop", "notebook", "thinkpad", "elitebook", "macbook", "latitude",
+        "笔记本电脑", "笔记本", "电脑", "computer", "便携电脑",
+    },
+    "monitor": {
+        "monitor", "display", "screen", "bildschirm", "prolite",
+        "显示器", "显示屏", "屏幕",
+    },
+    "phone": {
+        "phone", "iphone", "smartphone", "samsung", "handy",
+        "手机", "电话", "智能手机",
+    },
+    "accessory": {
+        "docking", "dock", "thunderbolt", "headset", "headphone", "keyboard", "mouse", "webcam",
+        "扩展坞", "底座", "耳机", "键盘", "鼠标", "摄像头",
+        "dockingstation", "kopfhörer", "tastatur", "maus",
+    },
+    "workstation": {
+        "workstation", "desktop", "tower", "zbook", "precision",
+        "工作站", "台式机", "arbeitsstation",
+    },
+    "paper": {
+        "a4 打印纸", "a4纸", "a4 paper", "a4 papier", "copy paper",
+        "paper", "papier", "kopierpapier", "druckerpapier", "打印纸", "复印纸", "纸张", "80g",
     },
     "packaging": {
         "packaging", "box", "carton", "corrugated",
@@ -52,10 +73,11 @@ CATEGORY_KEYWORDS: dict[str, set[str]] = {
         "垃圾袋", "müllbeutel", "清洁用品",
     },
     "office": {
-        "office", "office supplies", "stationery", "办公", "纸", "papier", "paper", "a4",
-        "copy paper", "printer paper", "文件夹", "ordner", "folder", "folders",
-        "file folder", "binder", "打印", "drucker", "büro", "bürobedarf", "laminier", "塑封",
+        "office", "office supplies", "stationery", "办公",
+        "文件夹", "ordner", "folder", "folders", "file folder", "binder",
+        "打印", "drucker", "büro", "bürobedarf", "laminier", "塑封",
         "标签", "etiketten", "print", "copy",
+        "碎纸机", "shredder", "aktenvernichter", "schredder", "打印机", "printer",
     },
     "safetyShoes": {
         "safety shoe", "sicherheitsschuh", "安全鞋", "schutzschuh",
@@ -90,7 +112,8 @@ class IntentParser:
         prompt = (
             "Extract procurement search intent from the user's Chinese, English, or German query. "
             "Identify category using one of: glassAdhesive, rubberSeal, waterDeflector, "
-            "glassRaw, hardware, packaging, cleaning, office, safetyShoes, firstAid, equipment. "
+            "glassRaw, hardware, laptop, monitor, phone, accessory, workstation, paper, "
+            "packaging, cleaning, office, safetyShoes, firstAid, equipment. "
             "Extract country, required certifications, maximum unit price in EUR, "
             "maximum delivery days, and concise search keywords. "
             f"Query: {query}"
@@ -138,10 +161,25 @@ class IntentParser:
 
     @staticmethod
     def _extract_category(normalized: str) -> Optional[str]:
+        matches: list[tuple[int, str]] = []
         for category, aliases in CATEGORY_KEYWORDS.items():
-            if any(alias in normalized for alias in aliases):
-                return category
-        return None
+            best = max((len(alias) for alias in aliases if alias in normalized), default=0)
+            if best:
+                matches.append((best, category))
+        if not matches:
+            return None
+        priority = {
+            "paper": 30,
+            "laptop": 30,
+            "monitor": 30,
+            "phone": 30,
+            "accessory": 30,
+            "workstation": 30,
+            "office": 10,
+            "hardware": 10,
+        }
+        matches.sort(key=lambda item: (item[0], priority.get(item[1], 20)), reverse=True)
+        return matches[0][1]
 
     @staticmethod
     def _extract_country(normalized: str) -> Optional[str]:

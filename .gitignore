@@ -1,43 +1,39 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
-# Python
-__pycache__/
-*.pyc
+# Dependencies
+node_modules/
 backend/venv/
-backend/.env
-backend/chroma_data/
-backend/data/conversations/
-*.egg-info/
 
-# Env files (keep .env.example)
+# Environment (API keys, database URLs — NEVER commit)
 .env
 backend/.env
 
-# Vite cache
-.vite/
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
 
-# External project reference data
-AW_*
+# Test cache
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build output
+dist/
+build/
+
+# ChromaDB data (local vector DB — may contain PII)
+chroma_data/
+backend/chroma_data/
+
+# Logs
+*.log
+
+# Local user conversation data (never commit)
+backend/data/conversations/

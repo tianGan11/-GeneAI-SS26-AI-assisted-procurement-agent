@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { Translation } from '../i18n'
 import type {
   ComparisonItem,
@@ -13,6 +13,7 @@ import { useMemory } from '../context/MemoryContext'
 import { StepIndicator, MatchScoreBadge, ExportPrintToolbar, AnalyzeButton, RestoredBanner } from '../components/shared'
 import { FeedbackModal } from '../components/FeedbackModal'
 import { WeightControl } from '../components/WeightControl'
+import { AgentChatProgress } from '../components/AgentChatProgress'
 
 const DELIVERY_KEYS: DeliveryOptionKey[] = ['unlimited', 'within3', 'within7']
 
@@ -30,101 +31,6 @@ interface RankOptions {
 }
 
 type SearchStatus = 'idle' | 'running' | 'success' | 'empty' | 'error'
-
-function AgentProgressPanel({ job, t }: { job: ComparisonJob | null; t: Translation }) {
-  const copy = t.comparison.agentProgress
-  const backendProgress = job?.progress ?? 0
-  const [displayedProgress, setDisplayedProgress] = useState(0)
-  const events = job?.events ?? []
-  const isRunning = job?.status !== 'failed' && job?.status !== 'completed'
-  const progress = Math.round(displayedProgress)
-  const statusLabel = job?.status === 'failed' ? copy.failedTitle : copy.runningTitle
-  const eventListRef = useRef<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    if (!job) return
-    const timer = window.setInterval(() => {
-      setDisplayedProgress((prev) => {
-        if (job.status === 'completed') return Math.min(100, prev + 4)
-        if (job.status === 'failed') return Math.max(prev, backendProgress)
-        return Math.min(92, prev + 0.28)
-      })
-    }, 200)
-    return () => window.clearInterval(timer)
-  }, [backendProgress, job])
-
-  useEffect(() => {
-    const list = eventListRef.current
-    if (!list) return
-    list.scrollTo({ top: list.scrollHeight, behavior: 'smooth' })
-  }, [events.length, job?.status])
-
-  return (
-    <section className="overflow-hidden rounded-2xl border border-blue-100 bg-gradient-to-br from-white via-blue-50/70 to-indigo-50/60 shadow-sm print:hidden">
-      <div className="border-b border-white/70 px-6 py-5 backdrop-blur">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-sm font-bold text-white shadow-lg shadow-blue-200">
-              {isRunning ? (
-                <span className="relative flex h-5 w-5 items-center justify-center" aria-label="Agent is working">
-                  <span className="absolute h-5 w-5 animate-ping rounded-full bg-white/50" />
-                  <span className="h-3 w-3 animate-pulse rounded-full bg-white" />
-                </span>
-              ) : (
-                'AI'
-              )}
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-500">{copy.eyebrow}</p>
-              <h2 className="mt-1 text-lg font-semibold text-slate-950">{statusLabel}</h2>
-              {isRunning && (
-                <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-blue-100/80 px-2.5 py-1 text-xs font-semibold text-blue-700 ring-1 ring-blue-200">
-                  <span className="relative flex h-2.5 w-2.5">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-500 opacity-60" />
-                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-blue-600" />
-                  </span>
-                  {copy.activeLabel}
-                </div>
-              )}
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">{copy.description}</p>
-            </div>
-          </div>
-          <div className="rounded-2xl bg-white/85 px-4 py-3 text-right shadow-sm ring-1 ring-blue-100">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{copy.progress}</p>
-            <p className="text-2xl font-semibold text-blue-700">{progress}%</p>
-          </div>
-        </div>
-
-        <div className="mt-5 h-2 overflow-hidden rounded-full bg-white ring-1 ring-blue-100">
-          <div className="relative h-full overflow-hidden rounded-full bg-blue-600 transition-[width] duration-700 ease-out" style={{ width: `${progress}%` }}>
-            {isRunning && <span className="absolute inset-0 animate-pulse bg-white/30" />}
-          </div>
-        </div>
-      </div>
-
-      <div className="p-5">
-        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{copy.thoughtLogLabel}</p>
-        <div ref={eventListRef} className="mt-3 max-h-64 space-y-2.5 overflow-auto pr-1">
-          {events.length === 0 ? (
-            <p className="text-sm leading-6 text-slate-500 italic">{copy.emptyText}</p>
-          ) : (
-            events.map((event) => (
-              <div
-                key={`${event.timestamp}-${event.phase}-${event.message}`}
-                className="flex items-start gap-2.5 rounded-xl bg-white/80 px-3.5 py-2.5 shadow-sm ring-1 ring-inset ring-blue-100"
-              >
-                <span className="mt-0.5 text-xs text-slate-400 tabular-nums">
-                  {new Date(event.timestamp).toLocaleTimeString()}
-                </span>
-                <p className="text-sm leading-6 text-slate-700">{event.message}</p>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    </section>
-  )
-}
 
 /** Normalize a value to 0–1; higher is always better. */
 function normalize(value: number, min: number, max: number, higherIsBetter: boolean): number {
@@ -216,6 +122,10 @@ export function ComparisonModule({
     : undefined
 
   const [requirement, setRequirement] = useState(init?.query ?? '')
+  const [productName, setProductName] = useState(init?.productName ?? '')
+  const [brand, setBrand] = useState(init?.brand ?? '')
+  const [model, setModel] = useState(init?.model ?? '')
+  const [quantity, setQuantity] = useState(init?.quantity ?? '')
   const [minPrice, setMinPrice] = useState(init?.minPrice ?? '')
   const [maxPrice, setMaxPrice] = useState(init?.maxPrice ?? '')
   const [deliveryTime, setDeliveryTime] = useState<DeliveryOptionKey>(init?.deliveryTime ?? 'unlimited')
@@ -240,17 +150,52 @@ export function ComparisonModule({
   // Top of the ranked list is the recommended pick.
   const recommendedId = rows.length > 0 ? rows[0].id : null
 
+  /** Append explicit comparison fields to the free-text requirement for backend compatibility. */
+  const buildEnhancedRequirement = () => {
+    if (!productName && !brand && !model && !quantity) return requirement
+    const parts: string[] = []
+    if (productName) parts.push(`Product: ${productName}`)
+    if (brand) parts.push(`Brand: ${brand}`)
+    if (model) parts.push(`Model: ${model}`)
+    if (quantity) parts.push(`Quantity: ${quantity}`)
+    return `${requirement}\n---\n${parts.join('\n')}`
+  }
+
+  /** Human-readable structured input summary for the conversation memory card. */
+  const buildStructuredSummary = (): Record<string, string> => {
+    const summary: Record<string, string> = {}
+    if (productName) summary[c.productName] = productName
+    if (brand) summary[c.brand] = brand
+    if (model) summary[c.model] = model
+    if (quantity) summary[c.quantity] = quantity
+    return summary
+  }
+
   // Builds the memory record for the current query + all entered inputs.
   const buildRecord = (ranked: ScoredItem[]) => ({
     module: 'comparison' as const,
     query: requirement.trim() || '(no text — filter browse)',
     filters: {
+      ...buildStructuredSummary(),
       [c.budget]: `${minPrice || '0'} – ${maxPrice || '∞'} €`,
       [c.delivery]: c.deliveryOptions[deliveryTime],
       [c.weightTitle]: `${c.weightPrice} ${weights.price}% · ${c.weightDelivery} ${weights.delivery}% · ${c.weightRating} ${weights.rating}%`,
     },
-    restore: { query: requirement, minPrice, maxPrice, deliveryTime, weights },
-    requestSnapshot: { query: requirement, minPrice, maxPrice, deliveryTime, weights },
+    restore: { query: requirement, productName, brand, model, quantity, minPrice, maxPrice, deliveryTime, weights },
+    requestSnapshot: {
+      query: requirement,
+      enhancedQuery: buildEnhancedRequirement(),
+      structured: {
+        productName: productName || undefined,
+        brand: brand || undefined,
+        model: model || undefined,
+        quantity: quantity || undefined,
+      },
+      minPrice,
+      maxPrice,
+      deliveryTime,
+      weights,
+    },
     resultCount: ranked.length,
     candidateNames: ranked.map((row) => row.vendor),
     resultsSnapshot: ranked as unknown as Record<string, unknown>[],
@@ -268,6 +213,7 @@ export function ComparisonModule({
   }
 
   const handleAnalyze = async () => {
+    const enhancedRequirement = buildEnhancedRequirement()
     setIsAnalyzing(true)
     setCurrentStep(1)
     setSearchStatus('running')
@@ -284,7 +230,7 @@ export function ComparisonModule({
     try {
       if (apiEnabled) {
         try {
-          const created = await api.comparison.createJob(requirement, filters, weights)
+          const created = await api.comparison.createJob(enhancedRequirement, filters, weights)
           setComparisonJob(created)
           let finished: ComparisonJob
           try {
@@ -305,7 +251,7 @@ export function ComparisonModule({
           }
         } catch {
           setComparisonJob(null)
-          const res = await api.comparison.search(requirement, filters)
+          const res = await api.comparison.search(enhancedRequirement, filters)
           list = res.results
           setSearchStatus(list.length > 0 ? 'success' : 'empty')
         }
@@ -352,6 +298,53 @@ export function ComparisonModule({
           className="w-full resize-none rounded-lg border border-slate-200 bg-slate-50/50 px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
         />
         <p className="mt-1.5 text-xs text-slate-400">{c.hint}</p>
+
+        <div className="mt-6 border-t border-slate-200 pt-6">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{c.structuredLabel}</p>
+          <p className="mb-4 mt-0.5 text-xs text-slate-400">{c.structuredHint}</p>
+          <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">{c.productName}</label>
+              <input
+                type="text"
+                value={productName}
+                onChange={(e) => setProductName(e.target.value)}
+                placeholder={c.productNamePlaceholder}
+                className="w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">{c.brand}</label>
+              <input
+                type="text"
+                value={brand}
+                onChange={(e) => setBrand(e.target.value)}
+                placeholder={c.brandPlaceholder}
+                className="w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">{c.model}</label>
+              <input
+                type="text"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                placeholder={c.modelPlaceholder}
+                className="w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">{c.quantity}</label>
+              <input
+                type="text"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                placeholder={c.quantityPlaceholder}
+                className="w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
+          </div>
+        </div>
 
         <div className="mt-4 rounded-lg bg-gray-50 px-4 py-3.5">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">{c.hardFilters}</p>
@@ -401,7 +394,7 @@ export function ComparisonModule({
         <StepIndicator currentStep={currentStep} steps={t.steps} />
       </section>
 
-      {comparisonJob && searchStatus !== 'idle' && <AgentProgressPanel key={comparisonJob.jobId} job={comparisonJob} t={t} />}
+      {comparisonJob && searchStatus !== 'idle' && <AgentChatProgress key={comparisonJob.jobId} job={comparisonJob} copy={t.comparison.agentProgress} />}
 
       {restoredResults && <RestoredBanner t={t} />}
 
@@ -495,17 +488,19 @@ function ComparisonTable({
   }
   return (
     <div className="cmp-print overflow-x-auto rounded-lg border border-slate-200 print:overflow-visible">
-      <table className="min-w-[1200px] w-full border-collapse text-left text-sm align-middle print:min-w-0">
+      <table className="min-w-[1480px] w-full border-collapse text-left text-sm align-middle print:min-w-0">
         <thead>
           <tr className="border-b border-slate-200 bg-slate-50">
-            <th className={`sticky left-0 z-20 min-w-[240px] border-r border-gray-100 bg-slate-50 shadow-[2px_0_5px_rgba(0,0,0,0.03)] ${HEAD_CELL}`}>
+            <th className={`sticky left-0 z-20 min-w-[220px] border-r border-gray-100 bg-slate-50 shadow-[2px_0_5px_rgba(0,0,0,0.03)] ${HEAD_CELL}`}>
               {c.colVendor}
             </th>
+            <th className={`min-w-[180px] ${HEAD_CELL}`}>{c.colPlatform}</th>
+            <th className={`min-w-[320px] ${HEAD_CELL}`}>{c.colProduct}</th>
             <th className={`min-w-[140px] ${HEAD_CELL}`}>{c.colScore}</th>
-            <th className={`min-w-[110px] ${HEAD_CELL}`}>{c.colPrice}</th>
-            <th className={`min-w-[120px] ${HEAD_CELL}`}>{c.colDelivery}</th>
-            <th className={`min-w-[160px] ${HEAD_CELL}`}>{c.colPayment}</th>
-            <th className={`min-w-[150px] ${HEAD_CELL}`}>{c.colDeliveryMethod}</th>
+            <th className={`min-w-[120px] ${HEAD_CELL}`}>{c.colPrice}</th>
+            <th className={`min-w-[140px] ${HEAD_CELL}`}>{c.colDelivery}</th>
+            <th className={`min-w-[170px] ${HEAD_CELL}`}>{c.colPayment}</th>
+            <th className={`min-w-[170px] ${HEAD_CELL}`}>{c.colDeliveryMethod}</th>
             <th className={`min-w-[120px] ${HEAD_CELL}`}>{c.colRating}</th>
             <th className={`min-w-[110px] print:hidden ${HEAD_CELL}`}>{c.colAction}</th>
           </tr>
@@ -514,9 +509,15 @@ function ComparisonTable({
           {rows.map((row) => {
             const highlight = row.id === recommendedId
             const stickyBg = highlight ? 'bg-blue-50' : 'bg-white'
+            const displayPlatform = row.platform || row.sourceDetail || row.source || '—'
+            const displayProduct = row.product || row.vendor || '—'
+            const displayPrice = row.unitLabel || (row.unitPriceEur == null ? '需人工核价' : `€ ${row.unitPriceEur}`)
+            const displayDelivery = row.deliveryLabel || '需确认交期'
+            const displayPayment = row.paymentLabel || '需确认付款方式'
+            const displayDeliveryMethod = row.deliveryMethod || '需确认配送方式'
             return (
               <tr key={row.id} className={`transition-colors hover:bg-slate-50/80 ${highlight ? 'bg-blue-50/40' : ''}`}>
-                <td className={`sticky left-0 z-10 min-w-[240px] border-r border-gray-100 px-4 py-4 align-middle shadow-[2px_0_5px_rgba(0,0,0,0.03)] ${stickyBg}`}>
+                <td className={`sticky left-0 z-10 min-w-[220px] border-r border-gray-100 px-4 py-4 align-middle shadow-[2px_0_5px_rgba(0,0,0,0.03)] ${stickyBg}`}>
                   <div className="mb-0.5 flex flex-wrap items-center gap-2">
                     <p className="text-sm font-semibold text-slate-900">{row.vendor}</p>
                     <span
@@ -534,40 +535,42 @@ function ComparisonTable({
                       </span>
                     )}
                   </div>
-                  <p className="text-sm text-gray-500">{row.platform}</p>
-                  <p className="mt-1 text-sm text-gray-500">{row.product}</p>
                   {row.source === 'web' && row.sourceUrls?.[0] && (
                     <a
                       href={row.sourceUrls[0]}
                       target="_blank"
                       rel="noreferrer"
-                      className="mt-1 inline-flex text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                      className="mt-1 inline-flex max-w-[190px] truncate text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline"
                     >
                       {row.sourceUrls[0]}
                     </a>
                   )}
                 </td>
+                <td className="px-4 py-4 align-middle text-sm text-gray-600">{displayPlatform}</td>
+                <td className="px-4 py-4 align-middle">
+                  <p className="line-clamp-3 text-sm font-medium leading-5 text-slate-800">{displayProduct}</p>
+                </td>
                 <td className="px-4 py-4 align-middle">
                   <MatchScoreBadge score={row.score} />
                 </td>
                 <td className="px-4 py-4 align-middle">
-                  <span className="whitespace-nowrap text-sm font-semibold text-slate-900">{row.unitLabel}</span>
+                  <span className="whitespace-nowrap text-sm font-semibold text-slate-900">{displayPrice}</span>
                   {row.source === 'web' && row.priceConfidence === 'unknown' && (
                     <span className="mt-1 block rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-100">
                       {c.webNeedsManualCheck}
                     </span>
                   )}
                 </td>
-                <td className="px-4 py-4 align-middle text-sm text-gray-600">{row.deliveryLabel}</td>
+                <td className="px-4 py-4 align-middle text-sm text-gray-600">{displayDelivery}</td>
                 <td className="px-4 py-4 align-middle">
-                  <span className="text-sm text-gray-600">{row.paymentLabel}</span>
+                  <span className="text-sm text-gray-600">{displayPayment}</span>
                   {row.paymentTerm === 'onAccount' && (
                     <span className="ml-1.5 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
                       {c.paymentTerms.onAccount}
                     </span>
                   )}
                 </td>
-                <td className="px-4 py-4 align-middle text-sm text-gray-600">{row.deliveryMethod}</td>
+                <td className="px-4 py-4 align-middle text-sm text-gray-600">{displayDeliveryMethod}</td>
                 <td className="px-4 py-4 align-middle">
                   <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm text-slate-700">
                     <span className="font-semibold text-slate-900">{row.rating.toFixed(1)}</span>

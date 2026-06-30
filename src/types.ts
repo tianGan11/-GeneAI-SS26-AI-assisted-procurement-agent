@@ -147,6 +147,7 @@ export interface ConversationRestore {
   quantity?: string
   unit?: string
   brand?: string
+  model?: string
   structuredCategory?: string
   structuredCountry?: string
   structuredCerts?: string

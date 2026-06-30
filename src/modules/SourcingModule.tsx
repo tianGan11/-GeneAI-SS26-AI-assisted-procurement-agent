@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Translation } from '../i18n'
 import type { Supplier, ConversationRecord, FeedbackRecord } from '../types'
 import { MOCK_SUPPLIERS } from '../data/suppliers'
@@ -7,6 +7,7 @@ import { useMemory } from '../context/MemoryContext'
 import { StepIndicator, ExportPrintToolbar, AnalyzeButton, RestoredBanner } from '../components/shared'
 import { FeedbackModal } from '../components/FeedbackModal'
 import { SearchIcon } from '../components/icons'
+import { AgentChatProgress } from '../components/AgentChatProgress'
 
 function SupplierCard({
   supplier,
@@ -152,103 +153,6 @@ function isDatabaseSupplier(supplier: Supplier): boolean {
   return supplier.source !== 'web'
 }
 
-function AgentProgressPanel({ job, t }: { job: SourcingJob | null; t: Translation }) {
-  const copy = t.sourcing.agentProgress
-  const backendProgress = job?.progress ?? 0
-  const [displayedProgress, setDisplayedProgress] = useState(0)
-  const events = job?.events ?? []
-  const isRunning = job?.status !== 'failed' && job?.status !== 'completed'
-  const progress = Math.round(displayedProgress)
-  const statusLabel = job?.status === 'failed' ? copy.failedTitle : copy.runningTitle
-  const eventListRef = useRef<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    if (!job) return
-    const timer = window.setInterval(() => {
-      setDisplayedProgress((prev) => {
-        if (job.status === 'completed') return Math.min(100, prev + 4)
-        if (job.status === 'failed') return Math.max(prev, backendProgress)
-        // Smooth, mostly linear visual progress: do not jump to backend event percentages.
-        // Cap below completion until the backend really finishes. 0.28 per 200ms ≈ 84%/minute.
-        return Math.min(92, prev + 0.28)
-      })
-    }, 200)
-    return () => window.clearInterval(timer)
-  }, [backendProgress, job])
-
-  useEffect(() => {
-    const list = eventListRef.current
-    if (!list) return
-    list.scrollTo({ top: list.scrollHeight, behavior: 'smooth' })
-  }, [events.length, job?.status])
-
-  return (
-    <section className="overflow-hidden rounded-2xl border border-blue-100 bg-gradient-to-br from-white via-blue-50/70 to-indigo-50/60 shadow-sm print:hidden">
-      <div className="border-b border-white/70 px-6 py-5 backdrop-blur">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-sm font-bold text-white shadow-lg shadow-blue-200">
-              {isRunning ? (
-                <span className="relative flex h-5 w-5 items-center justify-center" aria-label="Agent is working">
-                  <span className="absolute h-5 w-5 animate-ping rounded-full bg-white/50" />
-                  <span className="h-3 w-3 animate-pulse rounded-full bg-white" />
-                </span>
-              ) : (
-                'AI'
-              )}
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-500">{copy.eyebrow}</p>
-              <h2 className="mt-1 text-lg font-semibold text-slate-950">{statusLabel}</h2>
-              {isRunning && (
-                <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-blue-100/80 px-2.5 py-1 text-xs font-semibold text-blue-700 ring-1 ring-blue-200">
-                  <span className="relative flex h-2.5 w-2.5">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-500 opacity-60" />
-                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-blue-600" />
-                  </span>
-                  {copy.activeLabel}
-                </div>
-              )}
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">{copy.description}</p>
-            </div>
-          </div>
-          <div className="rounded-2xl bg-white/85 px-4 py-3 text-right shadow-sm ring-1 ring-blue-100">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{copy.progress}</p>
-            <p className="text-2xl font-semibold text-blue-700">{progress}%</p>
-          </div>
-        </div>
-
-        <div className="mt-5 h-2 overflow-hidden rounded-full bg-white ring-1 ring-blue-100">
-          <div className="relative h-full overflow-hidden rounded-full bg-blue-600 transition-all duration-500" style={{ width: `${progress}%` }}>
-            {isRunning && <span className="absolute inset-0 animate-pulse bg-white/30" />}
-          </div>
-        </div>
-      </div>
-
-      <div className="p-5">
-        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{copy.thoughtLogLabel}</p>
-        <div ref={eventListRef} className="mt-3 max-h-64 space-y-2.5 overflow-auto pr-1">
-          {events.length === 0 ? (
-            <p className="text-sm leading-6 text-slate-500 italic">{copy.emptyText}</p>
-          ) : (
-            events.map((event) => (
-              <div
-                key={`${event.timestamp}-${event.phase}-${event.message}`}
-                className="flex items-start gap-2.5 rounded-xl bg-white/80 px-3.5 py-2.5 shadow-sm ring-1 ring-inset ring-blue-100"
-              >
-                <span className="mt-0.5 text-xs text-slate-400 tabular-nums">
-                  {new Date(event.timestamp).toLocaleTimeString()}
-                </span>
-                <p className="text-sm leading-6 text-slate-700">{event.message}</p>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    </section>
-  )
-}
-
 export function SourcingModule({
   t,
   restore,
@@ -312,7 +216,6 @@ export function SourcingModule({
   // ── Structured fields state (双模输入表单) ──────────────────────────────
   const [structProductName, setStructProductName] = useState(savedRestore?.productName ?? '')
   const [structQuantity, setStructQuantity] = useState(savedRestore?.quantity ?? '')
-  const [structUnit, setStructUnit] = useState(savedRestore?.unit ?? 'pcs')
   const [structBrand, setStructBrand] = useState(savedRestore?.brand ?? '')
   const [structCategory, setStructCategory] = useState(savedRestore?.structuredCategory ?? '')
   const [structCountry, setStructCountry] = useState(savedRestore?.structuredCountry ?? '')
@@ -324,7 +227,7 @@ export function SourcingModule({
       return query
     const parts: string[] = []
     if (structProductName) parts.push(`Product: ${structProductName}`)
-    if (structQuantity) parts.push(`Quantity: ${structQuantity} ${structUnit}`)
+    if (structQuantity) parts.push(`Quantity: ${structQuantity}`)
     if (structBrand) parts.push(`Brand: ${structBrand}`)
     if (structCategory) parts.push(`Category: ${structCategory}`)
     if (structCountry) parts.push(`Target Country: ${structCountry}`)
@@ -336,7 +239,6 @@ export function SourcingModule({
     const structured: SourcingStructuredFields = {
       productName: structProductName || undefined,
       quantity: structQuantity || undefined,
-      unit: structUnit || undefined,
       brand: structBrand || undefined,
       category: structCategory || undefined,
       country: structCountry || undefined,
@@ -350,7 +252,7 @@ export function SourcingModule({
     const s: Record<string, string> = {}
     const add = (k: string, v: string) => { if (v) s[k] = v }
     add(t.sourcing.productName, structProductName)
-    if (structQuantity) add(t.sourcing.quantity, `${structQuantity} ${structUnit}`)
+    add(t.sourcing.quantity, structQuantity)
     add(t.sourcing.brand, structBrand)
     add(t.sourcing.structuredCategory, structCategory)
     add(t.sourcing.structuredCountry, structCountry)
@@ -370,7 +272,6 @@ export function SourcingModule({
         query,
         productName: structProductName || undefined,
         quantity: structQuantity || undefined,
-        unit: structUnit || undefined,
         brand: structBrand || undefined,
         structuredCategory: structCategory || undefined,
         structuredCountry: structCountry || undefined,
@@ -517,28 +418,16 @@ export function SourcingModule({
               />
             </div>
 
-            {/* Quantity + Unit */}
+            {/* Quantity */}
             <div>
               <label className="mb-1.5 block text-sm font-medium text-slate-700">{t.sourcing.quantity}</label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={structQuantity}
-                  onChange={(e) => setStructQuantity(e.target.value)}
-                  placeholder={t.sourcing.quantityPlaceholder}
-                  className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                />
-                <select
-                  value={structUnit}
-                  onChange={(e) => setStructUnit(e.target.value)}
-                  className="w-20 rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                >
-                  <option value="pcs">{t.sourcing.units.pcs}</option>
-                  <option value="kg">{t.sourcing.units.kg}</option>
-                  <option value="m">{t.sourcing.units.m}</option>
-                  <option value="set">{t.sourcing.units.set}</option>
-                </select>
-              </div>
+              <input
+                type="text"
+                value={structQuantity}
+                onChange={(e) => setStructQuantity(e.target.value)}
+                placeholder={t.sourcing.quantityPlaceholder}
+                className="w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 transition-colors focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
             </div>
 
             {/* Brand */}
@@ -604,7 +493,7 @@ export function SourcingModule({
         <StepIndicator currentStep={currentStep} steps={t.steps} />
       </section>
 
-      {searchJob && searchStatus !== 'idle' && <AgentProgressPanel key={searchJob.jobId} job={searchJob} t={t} />}
+      {searchJob && searchStatus !== 'idle' && <AgentChatProgress key={searchJob.jobId} job={searchJob} copy={t.sourcing.agentProgress} />}
 
       {hasRun && (
         <section className="space-y-4">

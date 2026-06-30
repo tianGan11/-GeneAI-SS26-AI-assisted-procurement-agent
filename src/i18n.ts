@@ -114,6 +114,16 @@ export interface Translation {
     inputLabel: string
     placeholder: string
     hint: string
+    structuredLabel: string
+    structuredHint: string
+    productName: string
+    productNamePlaceholder: string
+    quantity: string
+    quantityPlaceholder: string
+    brand: string
+    brandPlaceholder: string
+    model: string
+    modelPlaceholder: string
     hardFilters: string
     budget: string
     delivery: string
@@ -293,7 +303,7 @@ export const translations: Record<Language, Translation> = {
       productName: 'Product name',
       productNamePlaceholder: 'e.g. Rubber seal strip EPDM',
       quantity: 'Quantity',
-      quantityPlaceholder: 'e.g. 500',
+      quantityPlaceholder: 'e.g. 500 pcs / 500 kg / 500 sets',
       unit: 'Unit',
       brand: 'Brand (optional)',
       brandPlaceholder: 'e.g. Bosch, Henkel',
@@ -349,6 +359,16 @@ export const translations: Record<Language, Translation> = {
       placeholder:
         'Enter your procurement needs, e.g.: We need a batch of windscreen adhesive cartridges...',
       hint: 'Include specs, quantity, budget and delivery requirements.',
+      structuredLabel: 'Detailed requirements (optional — fills in automatically when you describe above)',
+      structuredHint: 'Product name, brand, model, and quantity here will take priority over the natural-language description for quote comparison.',
+      productName: 'Product name',
+      productNamePlaceholder: 'e.g. Windscreen adhesive cartridge',
+      brand: 'Brand (optional)',
+      brandPlaceholder: 'e.g. Bosch, Henkel, Sika',
+      model: 'Model',
+      modelPlaceholder: 'e.g. PU 8597 HMLC / 400 ml',
+      quantity: 'Quantity',
+      quantityPlaceholder: 'e.g. 500 pcs / 500 kg / 500 sets',
       hardFilters: 'Pre-filter conditions (Hard Filters)',
       budget: 'Budget limit',
       delivery: 'Delivery time',
@@ -365,7 +385,7 @@ export const translations: Record<Language, Translation> = {
       weightDelivery: 'Delivery',
       weightRating: 'Reviews',
       tableTitle: 'Decision comparison table',
-      colVendor: 'Vendor / Platform',
+      colVendor: 'Vendor',
       colPlatform: 'Platform',
       colProduct: 'Product',
       colMatch: 'Product match',
@@ -533,7 +553,7 @@ export const translations: Record<Language, Translation> = {
       productName: '商品名称',
       productNamePlaceholder: '例如：橡胶密封条 EPDM',
       quantity: '数量',
-      quantityPlaceholder: '例如 500',
+      quantityPlaceholder: '例如：500个、500千克、500套',
       unit: '单位',
       brand: '品牌（可选）',
       brandPlaceholder: '例如：Bosch、Henkel',
@@ -587,6 +607,16 @@ export const translations: Record<Language, Translation> = {
       inputLabel: '采购需求输入',
       placeholder: '请输入采购需求，例如：需要采购一批挡风玻璃胶……',
       hint: '支持描述规格、数量、预算、交付要求等关键信息。',
+      structuredLabel: '详细需求（可选 — 填写后优先使用）',
+      structuredHint: '此处填写的商品名称、品牌、型号和数量会优先于自然语言描述，用于标准品比价。',
+      productName: '商品名称',
+      productNamePlaceholder: '例如：挡风玻璃胶筒',
+      brand: '品牌（可选）',
+      brandPlaceholder: '例如：Bosch、Henkel、Sika',
+      model: '型号',
+      modelPlaceholder: '例如：PU 8597 HMLC / 400 ml',
+      quantity: '数量',
+      quantityPlaceholder: '例如：500个、500千克、500套',
       hardFilters: '前置条件过滤 (Hard Filters)',
       budget: '价格区间',
       delivery: '配送时效',
@@ -603,7 +633,7 @@ export const translations: Record<Language, Translation> = {
       weightDelivery: '货期',
       weightRating: '评价',
       tableTitle: '决策对比表',
-      colVendor: '供应商 / 平台',
+      colVendor: '供应商',
       colPlatform: '平台',
       colProduct: '产品',
       colMatch: '产品匹配度',

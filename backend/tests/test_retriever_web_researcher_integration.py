@@ -79,7 +79,7 @@ class RetrieverWebResearchIntegrationTest(unittest.TestCase):
 
         self.assertEqual(merged[0]["id"], "web-strong")
 
-    def test_low_quality_local_results_are_merged_with_web_researcher_results(self):
+    def test_low_quality_local_results_are_hidden_while_web_results_remain(self):
         intent = ProcurementIntent(category="office", country="Germany", keywords=["A4", "Papier"])
         local_supplier = {
             "id": "local-seal",
@@ -100,7 +100,8 @@ class RetrieverWebResearchIntegrationTest(unittest.TestCase):
         self.assertEqual(FakeWebResearcher.called_with[-1][1], 8)
         self.assertEqual(results[0]["name"], "Viking Office Deutschland")
         self.assertEqual(results[0]["source"], "web-research-fallback")
-        self.assertTrue(any(item["id"] == "local-seal" for item in results))
+        self.assertFalse(any(item["id"] == "local-seal" for item in results))
+        self.assertTrue(all(item["matchScore"] >= 60 for item in results))
 
 
 if __name__ == "__main__":

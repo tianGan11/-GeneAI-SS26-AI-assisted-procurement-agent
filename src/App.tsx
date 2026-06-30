@@ -21,7 +21,9 @@ function Workspace({
   setLanguage: (lang: Language) => void
 }) {
   const { user } = useAuth()
-  const [activeModule, setActiveModule] = useState<ModuleId>('sourcing')
+  const [activeModule, setActiveModule] = useState<ModuleId>(() =>
+    loadJSON<ModuleId>('fuyao.activeModule', 'sourcing'),
+  )
   const [moduleKeys, setModuleKeys] = useState<Record<'sourcing' | 'comparison', string>>({
     sourcing: 'sourcing-live',
     comparison: 'comparison-live',
@@ -35,6 +37,7 @@ function Workspace({
   // Opening from Memory is the explicit action that replaces a module state.
   const goToModule = (id: ModuleId) => {
     setActiveModule(id)
+    saveJSON('fuyao.activeModule', id)
   }
   const openConversation = (conv: ConversationRecord) => {
     setRestore(conv)
@@ -42,6 +45,7 @@ function Workspace({
       setModuleKeys((prev) => ({ ...prev, [conv.module]: conv.id }))
     }
     setActiveModule(conv.module)
+    saveJSON('fuyao.activeModule', conv.module)
   }
 
   if (!user) {

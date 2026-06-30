@@ -106,21 +106,28 @@ export function WeightControl({
     }
   }, [weights, cum1, cum2, onChange])
 
-  // --- Slider: set one factor, rescale the other two to keep the sum at 100. ---
+  // --- Slider priority rules ---
+  // Price is the highest-priority control: when price changes, lower priorities
+  // absorb the difference. Delivery is second: changing it keeps price fixed and
+  // gives the remainder to rating. Rating is the residual value and is not an
+  // independent slider because price + delivery already determine it.
   const setWeight = (key: FactorKey, raw: number) => {
-    const value = clamp(Math.round(raw), 0, 100)
-    const others = ORDER.filter((k) => k !== key)
-    const otherSum = weights[others[0]] + weights[others[1]]
-    const remaining = 100 - value
-    const next: FactorWeights = { ...weights, [key]: value }
-    if (otherSum === 0) {
-      next[others[0]] = Math.floor(remaining / 2)
-      next[others[1]] = remaining - next[others[0]]
-    } else {
-      next[others[0]] = Math.round((weights[others[0]] / otherSum) * remaining)
-      next[others[1]] = remaining - next[others[0]]
+    if (key === 'price') {
+      const price = clamp(Math.round(raw), 0, 100)
+      const remaining = 100 - price
+      const delivery = Math.min(weights.delivery, remaining)
+      onChange({ price, delivery, rating: remaining - delivery })
+      return
     }
-    onChange(next)
+
+    if (key === 'delivery') {
+      const delivery = clamp(Math.round(raw), 0, 100 - weights.price)
+      onChange({ price: weights.price, delivery, rating: 100 - weights.price - delivery })
+      return
+    }
+
+    // Rating is fixed to whatever remains after price and delivery.
+    onChange({ ...weights, rating: 100 - weights.price - weights.delivery })
   }
 
   const handle1 = pointAt(cx, cy, cum1, handleR)
@@ -172,27 +179,58 @@ export function WeightControl({
 
       {/* Legend + sliders */}
       <div className="w-full max-w-xs space-y-3">
-        {ORDER.map((key) => (
-          <div key={key}>
-            <div className="mb-1 flex items-center justify-between text-sm">
-              <span className="flex items-center gap-2 text-slate-600">
-                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: COLORS[key] }} />
-                {labels[key]}
-              </span>
-              <span className="font-semibold tabular-nums text-slate-900">{weights[key]}%</span>
+        {ORDER.map((key) => {
+          const max = key === 'delivery' ? 100 - weights.price : 100
+          const disabled = key === 'rating'
+          return (
+            <div key={key}>
+              <div className="mb-1 flex items-center justify-between text-sm">
+                <span className="flex items-center gap-2 text-slate-600">
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: COLORS[key] }} />
+                  {labels[key]}
+                </span>
+                <div className="relative w-16">
+                  <input
+                    type="number"
+                    min={0}
+                    max={max}
+                    value={weights[key]}
+                    readOnly={disabled}
+                    tabIndex={disabled ? -1 : 0}
+                    onChange={(e) => {
+                      if (!disabled) setWeight(key, Number(e.target.value))
+                    }}
+                    aria-label={`${labels[key]} percentage`}
+                    className={`w-full rounded-md border border-slate-200 bg-white py-1 pl-2 pr-5 text-right text-sm font-semibold tabular-nums text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+                      disabled ? 'cursor-not-allowed' : ''
+                    }`}
+                  />
+                  <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-500">%</span>
+                </div>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={max}
+                value={weights[key]}
+                aria-disabled={disabled}
+                tabIndex={disabled ? -1 : 0}
+                onPointerDown={(e) => {
+                  if (disabled) e.preventDefault()
+                }}
+                onKeyDown={(e) => {
+                  if (disabled) e.preventDefault()
+                }}
+                onChange={(e) => {
+                  if (!disabled) setWeight(key, Number(e.target.value))
+                }}
+                aria-label={labels[key]}
+                className={`w-full accent-blue-600 ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                style={{ accentColor: COLORS[key] }}
+              />
             </div>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={weights[key]}
-              onChange={(e) => setWeight(key, Number(e.target.value))}
-              aria-label={labels[key]}
-              className="w-full cursor-pointer accent-blue-600"
-              style={{ accentColor: COLORS[key] }}
-            />
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

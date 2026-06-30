@@ -11,6 +11,8 @@ from web_research.researcher import WebResearcher
 
 
 class SupplierRetriever:
+    MIN_DISPLAY_SCORE = 60
+
     def __init__(self, chroma_collection, suppliers: list[dict], llm=None):
         self.collection = chroma_collection
         self.suppliers = suppliers
@@ -24,22 +26,23 @@ class SupplierRetriever:
         """
         Search local DB by intent.
 
-        New logic (workflow1 only):
-          1. Score ALL local suppliers, count how many have score >= 60.
-          2. If >= 10 qualified → return ALL of them (uncapped).
-          3. If < 10 → trigger web search.
+        Workflow:
+          1. Score ALL local suppliers.
+          2. Keep only displayable local suppliers (matchScore >= 60).
+          3. Always trigger web search to supplement the local database.
           4. If web search returns < 5 results → use LLM to generate
              2-3 rephrased queries and re-search.
-          5. Merge local + web results, cap at top_k (no padding to 10).
+          5. Keep only displayable web suppliers (matchScore >= 60).
+          6. Merge local + web results, cap at top_k (no padding to 10).
         """
         query_str = self._intent_to_query(intent)
         # Important order: local database is searched first, then web research supplements it.
         all_local = self._search_local(query_str, intent, top_k=len(self.suppliers))
-        qualified = [s for s in all_local if s.get("matchScore", 0) >= 60]
+        qualified = self._displayable_results(all_local)
         if progress:
             progress(
                 "retrieve",
-                f"本地数据库已检索完成：找到 {len(all_local)} 条本地候选，其中 {len(qualified)} 条相关度较高；现在继续联网补充最新供应商。",
+                f"本地数据库已检索完成：找到 {len(all_local)} 条本地候选，其中 {len(qualified)} 条达到 60% 展示阈值；现在继续联网补充最新供应商。",
                 30,
             )
 
@@ -48,7 +51,7 @@ class SupplierRetriever:
         # caused equipment searches to skip web search entirely → fast but low match quality.
         if progress:
             progress("web", "正在进行网络搜索，补充本地数据库之外的新供应商来源...", 36)
-        web_results = await self._web_search(intent, progress=progress)
+        web_results = self._displayable_results(await self._web_search(intent, progress=progress))
 
         # <5 web results → LLM rephrase & re-search with alt queries
         if len(web_results) < 5 and (query or intent.keywords):
@@ -64,16 +67,50 @@ class SupplierRetriever:
                     max_delivery_days=intent.max_delivery_days,
                     keywords=alt_q.split(),
                 )
-                more = await self._web_search(alt_intent, progress=progress)
+                more = self._displayable_results(await self._web_search(alt_intent, progress=progress))
                 web_results = self._merge_results(web_results, more)
 
-        merged = self._merge_results(all_local, web_results)
+        merged = self._merge_results(qualified, web_results)
         return merged[:top_k]
 
+    @classmethod
+    def _displayable_results(cls, results: list[dict]) -> list[dict]:
+        """Only show candidates that meet the product's relevance threshold."""
+        return [item for item in results if int(item.get("matchScore", 0) or 0) >= cls.MIN_DISPLAY_SCORE]
+
     async def _web_search(self, intent: ProcurementIntent, progress=None) -> list[dict]:
-        """Run agent-like web research to discover external supplier candidates."""
+        """Run agent-like web research to discover external supplier candidates.
+        Prefers wlw.de (B2B directory) for structured supplier data, supplements with DDG."""
+        results = []
+        
+        # Phase A: wlw.de B2B directory
+        wlw_query = " ".join(intent.keywords[:3]) if intent.keywords else ""
+        if wlw_query:
+            try:
+                from web_research.wlw_scraper import search_wlw
+                wlw_raw = await search_wlw(wlw_query, limit=4, timeout=35)
+                for item in wlw_raw:
+                    if item.get("name"):
+                        item.setdefault("source", "web")
+                        item.setdefault("sourceDetail", "wlw")
+                        results.append(item)
+                if progress and results:
+                    progress("web", f"wlw.de B2B目录返回 {len(results)} 家供应商。", 39)
+            except Exception:
+                pass
+        
+        # Phase B: WebResearcher (DDG-based) as supplement
         researcher = WebResearcher(llm=self.llm)
-        return await researcher.research(intent, max_suppliers=8, progress=progress)
+        ddg_results = await researcher.research(intent, max_suppliers=max(3, 8 - len(results)), progress=progress)
+        
+        # Merge: wlw first, then DDG — dedup by website
+        seen_sites = {item.get("website", "") for item in results if item.get("website")}
+        for item in ddg_results:
+            if item.get("website") not in seen_sites:
+                results.append(item)
+                seen_sites.add(item.get("website", ""))
+        
+        return results[:8]
 
     async def _generate_alt_queries(self, query: str) -> list[str]:
         """Use LLM to generate 2-3 rephrased B2B search queries for re-search.
@@ -269,7 +306,7 @@ class SupplierRetriever:
             parts.append(f"max price {intent.max_price} EUR")
         if intent.max_delivery_days is not None:
             parts.append(f"delivery within {intent.max_delivery_days} days")
-        return " ".join(part for part in parts if part).strip() or "automotive procurement supplier"
+        return " ".join(part for part in parts if part).strip() or "procurement supplier Germany"
 
     @staticmethod
     def _supplier_to_document(supplier: dict) -> str:

@@ -14,10 +14,10 @@ load_dotenv()
 
 
 def get_connection():
-    """获取 Supabase 数据库连接"""
+    """获取 Supabase 数据库连接。无 DATABASE_URL 时返回 None（优雅降级）。"""
     database_url = os.getenv("DATABASE_URL")
     if not database_url:
-        raise RuntimeError("DATABASE_URL 没有设置，检查 .env 文件")
+        return None
     return psycopg2.connect(database_url)
 
 
@@ -167,8 +167,11 @@ async def query_products(
 def query_suppliers_sync() -> list[dict]:
     """
     同步版查询所有供应商，给 Agent 启动时一次性加载用。
+    无数据库连接时返回空列表（优雅降级，不影响网络搜索功能）。
     """
     conn = get_connection()
+    if conn is None:
+        return []
     try:
         cur = conn.cursor(cursor_factory=RealDictCursor)
         cur.execute("SELECT * FROM supplier")
@@ -205,8 +208,11 @@ def query_suppliers_sync() -> list[dict]:
 def query_products_sync() -> list[dict]:
     """
     同步版查询所有报价，给 Agent 启动时一次性加载用。
+    无数据库连接时返回空列表（优雅降级，不影响网络搜索功能）。
     """
     conn = get_connection()
+    if conn is None:
+        return []
     try:
         cur = conn.cursor(cursor_factory=RealDictCursor)
         cur.execute("""

@@ -8,7 +8,55 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 from urllib.parse import urljoin, urlparse
 
+from bs4 import BeautifulSoup
 from pydantic import BaseModel, Field
+# Standalone EUR price extractor to avoid circular import with procurement_agent
+def _quick_extract_eur_price(text: str) -> float | None:
+    import re
+    patterns = [
+        r'€\s*([0-9][0-9.,]*(?:[.,][0-9]{2})?)',
+        r'€\s*([0-9][0-9.,]*)\s*(?:[-\u2013]|,\u2013)',
+        r'([0-9][0-9.,]*(?:[.,][0-9]{2})?)\s*(?:EUR|Euro|€)',
+        r'([0-9][0-9.,]*)\s*(?:[-\u2013]|,\u2013)\s*(?:EUR|Euro|€)',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if not match:
+            continue
+        value = _parse_price_number(match.group(1))
+        if value is not None and 0.08 < value < 100000:
+            return value
+    return None
+
+def _parse_price_number(raw: str) -> float | None:
+    value = raw.strip().strip(".,;:").replace(" ", "")
+    if not value:
+        return None
+    dot = value.rfind(".")
+    comma = value.rfind(",")
+    if dot != -1 and comma != -1:
+        if dot > comma:
+            value = value.replace(",", "")
+        else:
+            value = value.replace(".", "").replace(",", ".")
+    elif comma != -1:
+        parts = value.split(",")
+        if len(parts[-1]) == 2:
+            value = "".join(parts[:-1]).replace(",", "") + "." + parts[-1]
+        else:
+            value = value.replace(",", "")
+    elif dot != -1:
+        parts = value.split(".")
+        if len(parts) > 2 and len(parts[-1]) == 2:
+            value = "".join(parts[:-1]) + "." + parts[-1]
+        elif len(parts) > 2:
+            value = "".join(parts)
+    try:
+        return float(value)
+    except ValueError:
+        return None
+
+
 
 from agent.parser import ProcurementIntent
 
@@ -53,15 +101,24 @@ class DuckDuckGoSearchProvider:
                 from duckduckgo_search import DDGS
 
             def run() -> list[SearchResult]:
-                with DDGS(timeout=12) as ddgs:
+                with DDGS(timeout=8) as ddgs:
                     rows = list(ddgs.text(query, max_results=max_results))
+                # Filter: prefer German (.de) and EU results, reject Asian TLDs
+                filtered = []
+                for row in rows:
+                    url = row.get("href") or row.get("url") or ""
+                    from urllib.parse import urlparse as _up
+                    tld = (_up(url).netloc or "").split(".")[-1].lower() if url else ""
+                    if tld in ("cn", "tw", "jp", "kr", "hk", "ru", "br", "in"):
+                        continue  # Skip non-European results
+                    filtered.append(row)
                 return [
                     SearchResult(
                         title=row.get("title") or "Web supplier",
                         url=row.get("href") or row.get("url") or "",
                         snippet=row.get("body") or "",
                     )
-                    for row in rows
+                    for row in filtered
                     if row.get("href") or row.get("url")
                 ]
 
@@ -71,15 +128,76 @@ class DuckDuckGoSearchProvider:
 
 
 class StaticPageFetcher:
-    async def fetch_page(self, url: str) -> PageSnapshot:
-        try:
-            import requests
-            from bs4 import BeautifulSoup
+    # Known German B2B/B2C shops that use product listing grids
+    PRODUCT_LISTING_DOMAINS = (
+        "schaefer-shop.de", "bueromarkt-ag.de", "otto-office.com",
+        "viking.de", "bueroshop24.de", "office-discount.de",
+        "mcbuero.de", "wrede-store.de", "printus.de",
+        "mediamarkt.de", "saturn.de", "otto.de",
+        "amazon.de", "idealo.de",
+    )
 
-            def run() -> PageSnapshot:
-                response = requests.get(
-                    url,
-                    timeout=12,
+    async def fetch_page(self, url: str) -> PageSnapshot:
+        """Fetch a page, bypassing basic bot protection with cloudscraper."""
+        try:
+            html = await self._fetch_html(url)
+            if not html:
+                return PageSnapshot(url=url, text="", links=[])
+            return self._parse_html(url, html)
+        except Exception:
+            return PageSnapshot(url=url, text="", links=[])
+
+    async def fetch_products_from_listing(self, url: str) -> list[dict]:
+        """If the URL is a product listing page, extract individual products.
+
+        Returns list of dicts with keys: product, unitPriceEur, unitLabel,
+        deliveryLabel, sourceUrls, evidenceSnippets, rating, reviews.
+        Returns empty list if not a listing page or extraction fails.
+        """
+        host = ""
+        try:
+            from urllib.parse import urlparse
+            host = (urlparse(url).netloc or "").replace("www.", "")
+        except Exception:
+            pass
+        if not any(d in host for d in self.PRODUCT_LISTING_DOMAINS):
+            return []
+
+        try:
+            html = await self._fetch_html(url)
+            if not html or len(html) < 5000:
+                return []
+            return self._parse_product_listing(url, html, host)
+        except Exception:
+            return []
+
+    async def _fetch_html(self, url: str) -> str:
+        """Try cloudscraper first, fall back to requests."""
+        import requests as req
+
+        def try_cloudscraper():
+            try:
+                # Only attempt cloudscraper for real domains (skip test/local URLs)
+                from urllib.parse import urlparse as _up
+                host = (_up(url).netloc or "").lower()
+                if not host or 'example' in host or 'localhost' in host or host.endswith('.test'):
+                    return None
+                import cloudscraper
+                scraper = cloudscraper.create_scraper(
+                    browser={'browser': 'chrome', 'platform': 'darwin', 'mobile': False}
+                )
+                resp = scraper.get(url, timeout=8)
+                if resp.status_code < 500 and len(resp.text) > 500:
+                    if '_Incapsula_Resource' not in resp.text and 'Request unsuccessful' not in resp.text:
+                        return resp.text
+            except Exception:
+                pass
+            return None
+
+        def try_requests():
+            try:
+                resp = req.get(
+                    url, timeout=8,
                     headers={
                         "User-Agent": (
                             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -88,28 +206,155 @@ class StaticPageFetcher:
                         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
                     },
                 )
-                if response.status_code >= 400:
-                    return PageSnapshot(url=url, text="", links=[])
-                soup = BeautifulSoup(response.text, "html.parser")
-                links: list[str] = []
-                for anchor in soup.find_all("a", href=True):
-                    href = str(anchor.get("href") or "").strip()
-                    if not href or href.startswith(("mailto:", "tel:", "javascript:", "#")):
-                        continue
-                    absolute = urljoin(response.url, href)
-                    if absolute.startswith(("http://", "https://")):
-                        links.append(absolute.split("#", 1)[0])
-                for noisy in soup(["script", "style", "noscript", "svg"]):
-                    noisy.decompose()
-                return PageSnapshot(
-                    url=response.url,
-                    text=WebResearcher.clean_text(soup.get_text(" ")),
-                    links=list(dict.fromkeys(links))[:80],
-                )
+                if resp.status_code < 500 and len(resp.text) > 500:
+                    return resp.text
+            except Exception:
+                pass
+            return None
 
-            return await asyncio.to_thread(run)
-        except Exception:
-            return PageSnapshot(url=url, text="", links=[])
+        html = await asyncio.to_thread(try_cloudscraper)
+        if not html:
+            html = await asyncio.to_thread(try_requests)
+        return html or ""
+
+    def _parse_html(self, url: str, html: str) -> PageSnapshot:
+        soup = BeautifulSoup(html, "html.parser")
+
+        # Product prices in JSON-LD, meta, itemprop, price classes
+        structured_fragments: list[str] = []
+        for meta in soup.find_all("meta"):
+            key = " ".join(
+                str(meta.get(attr) or "")
+                for attr in ("name", "property", "itemprop")
+            ).lower()
+            text = str(meta.get("content") or "").strip()
+            if text and any(marker in key for marker in ("price", "amount", "currency", "product")):
+                structured_fragments.append(text)
+        for script in soup.find_all("script", attrs={"type": "application/ld+json"}):
+            text = script.get_text(" ", strip=True)
+            if text and any(marker in text.lower() for marker in ("price", "offers", "eur", "€")):
+                structured_fragments.append(text[:4000])
+        for node in soup.find_all(attrs={"itemprop": re.compile("price|offer", re.I)}):
+            value = str(node.get("content") or node.get_text(" ", strip=True) or "").strip()
+            if value:
+                structured_fragments.append(value)
+        for node in soup.find_all(attrs={"class": re.compile("price|preis|amount", re.I)}):
+            value = node.get_text(" ", strip=True)
+            if value:
+                structured_fragments.append(value[:500])
+
+        links: list[str] = []
+        for anchor in soup.find_all("a", href=True):
+            href = str(anchor.get("href") or "").strip()
+            if not href or href.startswith(("mailto:", "tel:", "javascript:", "#")):
+                continue
+            absolute = urljoin(url, href)
+            if absolute.startswith(("http://", "https://")):
+                links.append(absolute.split("#", 1)[0])
+
+        for noisy in soup(["script", "style", "noscript", "svg"]):
+            noisy.decompose()
+        visible_text = WebResearcher.clean_text(soup.get_text(" "))
+        if structured_fragments:
+            visible_text = WebResearcher.clean_text(
+                f"{visible_text} " + " ".join(dict.fromkeys(structured_fragments))
+            )
+        return PageSnapshot(
+            url=url,
+            text=visible_text,
+            links=list(dict.fromkeys(links))[:80],
+        )
+
+    def _parse_product_listing(self, url: str, html: str, host: str) -> list[dict]:
+        """Parse individual products from a German e-commerce listing grid."""
+        soup = BeautifulSoup(html, "html.parser")
+        products: list[dict] = []
+        seen_titles: set[str] = set()
+
+        for footer in soup.find_all('div', class_=re.compile(r'product-element-footer', re.I)):
+            # Extract price from footer
+            price_text = ''
+            price_eur = None
+            for price_tag in footer.find_all(['span', 'div', 'strong', 'p']):
+                text = price_tag.get_text(' ', strip=True)
+                if re.search(r'[\d.,]+\s*[€ ]|[\d.,]+\s*EUR', text, re.I):
+                    price_text = text
+                    price_eur = _quick_extract_eur_price(text)
+                    break
+            if price_eur is None:
+                continue
+
+            # Go up to the product card container
+            card = footer
+            for _ in range(6):
+                card = card.parent
+                if card is None:
+                    break
+
+                # Find the product title
+                title = ''
+                for tag in card.find_all(['h2', 'h3', 'h4', 'a', 'span']):
+                    t = tag.get_text(' ', strip=True)
+                    # Filter: at least 20 chars, not pure navigation
+                    if len(t) > 20 and not t.startswith('Sortieren') and not t.startswith('Ansicht'):
+                        title = t[:200]
+                        break
+
+                if title and title not in seen_titles:
+                    seen_titles.add(title)
+
+                    # Extract delivery info
+                    delivery = ''
+                    delivery_days = None
+                    for d in card.find_all(string=re.compile(r'lieferbar|Lieferzeit|Tage|sofort', re.I)):
+                        delivery = d.strip()[:60]
+                        days_match = re.search(r'(\d+)\s*(?:-\s*\d+\s*)?(?:Werktag|Tag|Arbeitstag)', d.strip())
+                        if days_match:
+                            delivery_days = int(days_match.group(1))
+                        break
+
+                    # Extract rating if available
+                    rating = 0.0
+                    reviews = 0
+                    for star_elem in card.find_all(attrs={"class": re.compile(r'star|rating|bewertung', re.I)}):
+                        star_text = star_elem.get_text(' ', strip=True)
+                        star_match = re.search(r'(\d[\.\d]*)\s*/\s*5', star_text)
+                        if star_match:
+                            rating = float(star_match.group(1))
+                        count_match = re.search(r'\((\d+)\)', star_text)
+                        if count_match:
+                            reviews = int(count_match.group(1))
+
+                    # Build product links — product-specific URL first, listing page last
+                    product_urls = []
+                    for a_tag in card.find_all('a', href=True):
+                        href = str(a_tag.get('href') or '').strip()
+                        if href and href.startswith('/'):
+                            absolute = urljoin(url, href)
+                            if absolute not in product_urls:
+                                product_urls.append(absolute)
+                    if not product_urls:
+                        product_urls = [url]
+                    else:
+                        product_urls.append(url)  # listing page as fallback
+
+                    price_label = f'€ {price_eur:.2f}' if price_eur else '需人工核价'
+                    products.append({
+                        'product': title,
+                        'unitPriceEur': price_eur,
+                        'unitLabel': price_label,
+                        'deliveryDays': delivery_days,
+                        'deliveryLabel': delivery or '需确认交期',
+                        'rating': rating,
+                        'reviews': reviews,
+                        'sourceUrls': product_urls[:3],
+                        'evidenceSnippets': [f'{title[:100]}'],
+                        'priceConfidence': 'extracted' if price_eur else 'unknown',
+                    })
+
+                break
+
+        return products
 
     async def fetch_text(self, url: str) -> str:
         page = await self.fetch_page(url)

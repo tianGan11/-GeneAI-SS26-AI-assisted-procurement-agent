@@ -121,8 +121,14 @@ async function streamRequest<T>(path: string, onEvent: (event: T) => void): Prom
 
   for (;;) {
     const { value, done } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
+    // Always process data first, even when done=true (last chunk may carry data)
+    if (value) {
+      buffer += decoder.decode(value, { stream: true })
+    }
+    if (done) {
+      buffer += decoder.decode()  // flush remaining
+      break
+    }
     const chunks = buffer.split('\n\n')
     buffer = chunks.pop() ?? ''
 
@@ -131,6 +137,18 @@ async function streamRequest<T>(path: string, onEvent: (event: T) => void): Prom
         .split('\n')
         .find((line) => line.startsWith('data: '))
       if (!dataLine) continue
+      latest = JSON.parse(dataLine.slice(6)) as T
+      onEvent(latest)
+    }
+  }
+
+  // Process any remaining frames in the buffer after stream closure
+  const remaining = buffer.split('\n\n').filter(Boolean)
+  for (const chunk of remaining) {
+    const dataLine = chunk
+      .split('\n')
+      .find((line) => line.startsWith('data: '))
+    if (dataLine) {
       latest = JSON.parse(dataLine.slice(6)) as T
       onEvent(latest)
     }
